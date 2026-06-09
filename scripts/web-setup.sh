@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# One-command setup to make waterloo-learn reachable by ChatGPT via Tailscale
-# Funnel. Run:  npm run setup:chatgpt
+# One-command setup to make waterloo-learn reachable by web chat apps (ChatGPT,
+# Claude.ai) via Tailscale Funnel. Run:  npm run setup:web
 #
 # What it does:
 #   1. Generates a bearer token (saved to .env.local)
 #   2. Builds the server + ensures Playwright Chromium
 #   3. Logs you in to LEARN if needed (manual Duo)
 #   4. Brings Tailscale up and enables Funnel on your port (stable public URL)
-#   5. Prints your ChatGPT connector URL + token + the exact UI steps
+#   5. Prints your connector URL + token + the exact UI steps for each app
 #   6. Starts the server in the foreground
 #
 set -euo pipefail
@@ -76,26 +76,35 @@ rm -f "$ROOT/.funnel.err"
 DNS="$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
 [ -n "$DNS" ] || die "Couldn't read your Tailscale device name. Check 'tailscale status'."
 BASE="https://$DNS"
-# ChatGPT connectors offer only OAuth / No Auth — no API-key field — so the
-# secret rides in the URL path and ChatGPT is set to "No Auth".
+# Web chat connectors (ChatGPT, Claude.ai) offer only OAuth / No Auth — no
+# API-key field — so the secret rides in the URL path and auth is "No Auth".
 URL="$BASE/mcp/$LEARN_MCP_TOKEN"
 
 # --- 5. instructions -------------------------------------------------------
 cat <<EOF
 
 ============================================================
-$(bold " waterloo-learn is ready for ChatGPT")
+$(bold " waterloo-learn is ready for web chat apps")
 ============================================================
 
   Connector URL :  $URL
   Authentication:  No Auth   (the secret is in the URL above — keep it private)
 
-  In ChatGPT (one time):
+  Same URL works for ChatGPT and Claude.ai. Add it once per app:
+
+  ChatGPT (one time):
     1. Settings → Connectors → Advanced → turn on Developer mode
     2. Add custom connector → Connection: Server URL → paste the URL above
     3. Authentication: No Auth
     4. Check "I understand and want to continue", click Create
     5. Enable "waterloo-learn" from the tools menu in a chat.
+
+  Claude.ai (one time — no Developer mode needed):
+    1. Settings → Connectors  (a.k.a. Customize → Connectors)
+    2. Click "+" / Add custom connector
+    3. Name it "waterloo-learn", paste the URL above
+    4. Leave Advanced settings (OAuth) blank, click Add
+    5. Enable "waterloo-learn" in a chat.
 
   Treat the full URL like a password — anyone who has it can read your LEARN
   data. Don't paste it in shared chats or commit it.
@@ -104,9 +113,9 @@ $(bold " waterloo-learn is ready for ChatGPT")
     curl -s $BASE/health        # → ok
 
   The Funnel stays configured across reboots. The server (starting below)
-  must be running whenever you want ChatGPT to reach LEARN.
+  must be running whenever you want the chat app to reach LEARN.
   To make the server auto-start on login and stay up:
-    npm run autostart:chatgpt
+    npm run autostart:web
 
 ============================================================
 

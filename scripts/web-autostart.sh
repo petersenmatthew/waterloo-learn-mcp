@@ -3,7 +3,7 @@
 # Optional: install a macOS LaunchAgent so the HTTP server auto-starts on login
 # and is kept alive. Tailscale Funnel persists its own config across reboots, so
 # this is the only piece needed for a fully hands-off setup. Run:
-#   npm run autostart:chatgpt
+#   npm run autostart:web
 #
 # To remove it, the command is printed at the end.
 #

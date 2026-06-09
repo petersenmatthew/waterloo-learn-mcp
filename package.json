@@ -11,8 +11,10 @@
     "dev": "tsx src/index.ts",
     "start:http": "node dist/http.js",
     "dev:http": "tsx src/http.ts",
-    "setup:chatgpt": "bash scripts/chatgpt-setup.sh",
-    "autostart:chatgpt": "bash scripts/chatgpt-autostart.sh"
+    "setup:web": "bash scripts/web-setup.sh",
+    "autostart:web": "bash scripts/web-autostart.sh",
+    "setup:chatgpt": "bash scripts/web-setup.sh",
+    "autostart:chatgpt": "bash scripts/web-autostart.sh"
   },
   "repository": {
     "type": "git",
