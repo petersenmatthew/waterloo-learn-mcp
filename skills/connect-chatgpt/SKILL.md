@@ -87,7 +87,9 @@ curl -s -X POST https://<device>.ts.net/mcp/<token> \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"'
 ```
 
-Five tool names = good. Note there's **no auth header** — the secret is the path
+Six tool names = good. (`get_topic_file` returns slides as MCP image blocks —
+Claude reads these natively; ChatGPT's handling of image tool results is
+untested, so verify with a real deck before relying on it there.) Note there's **no auth header** — the secret is the path
 segment. (The server also accepts `Authorization: Bearer <token>` or
 `X-Api-Key: <token>` on the plain `/mcp` path for non-ChatGPT clients.)
 
