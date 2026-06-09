@@ -75,3 +75,13 @@ Tailscale must be running for Funnel to work (the macOS app auto-starts on login
 - `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in Claude (Desktop + Claude.ai) and ChatGPT.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
 - Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `PORT`, `LEARN_MCP_TOKEN`.
+
+---
+
+## Disclaimer
+
+This is an **unofficial, independent tool** built for personal academic use. It is **not affiliated with, endorsed by, or supported by** the University of Waterloo, D2L, or any related entity. "Waterloo LEARN" and related marks belong to their respective owners.
+
+The server acts on your behalf using **your own credentials** to access **only your own** course data — it accesses nothing you couldn't already see by logging into LEARN yourself. You are responsible for using it in accordance with the University of Waterloo's acceptable-use policies and LEARN's terms of service. Don't use it to access data that isn't yours, and don't share course content in ways that violate copyright or your instructors' wishes.
+
+LEARN's internal APIs and page structure can change without notice, which may break this tool at any time. It is provided **as-is, without warranty of any kind**. AI models can also misread or hallucinate content — **always verify grades, due dates, and other important information against LEARN directly.** Use at your own risk.
