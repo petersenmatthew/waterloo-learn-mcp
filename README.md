@@ -42,24 +42,29 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`, then r
 
 Local, no tunnel, no exposed session. Details: [skills/connect-claude-desktop/SKILL.md](skills/connect-claude-desktop/SKILL.md).
 
-## Connect to ChatGPT
+## Connect to a web chat (ChatGPT or Claude.ai)
 
-ChatGPT only talks to remote HTTPS servers. This exposes one over **Tailscale Funnel** (free, no VPS, stable URL):
+ChatGPT and Claude.ai are cloud-hosted — they reach your server remotely over HTTPS, unlike Claude Desktop (local). This exposes one URL over **Tailscale Funnel** (free, no VPS, stable URL) that **both apps share**:
 
 ```sh
-npm run setup:chatgpt       # builds, enables Funnel, prints your connector URL
-npm run autostart:chatgpt   # optional: keep server running across reboots
+npm run setup:web       # builds, enables Funnel, prints your connector URL + per-app steps
+npm run autostart:web   # optional: keep server running across reboots
 ```
 
-It prints a URL like `https://<device>.ts.net/mcp/<secret>`. In ChatGPT → Settings → Connectors → Developer mode → Add custom connector: **Server URL** + **No Auth** (ChatGPT has no API-key field, so the secret rides in the path). Details: [skills/connect-chatgpt/SKILL.md](skills/connect-chatgpt/SKILL.md).
+It prints a URL like `https://<device>.ts.net/mcp/<secret>`. Add it as a **custom connector** with **No Auth** (neither app has an API-key field, so the secret rides in the path):
 
-The full URL is the password — anyone with it can read your LEARN data. Your laptop must be awake with the server running for ChatGPT to reach it.
+- **ChatGPT** → Settings → Connectors → **Developer mode** → Add custom connector → Server URL.
+- **Claude.ai** → Settings → Connectors → **"+"** → name + URL (no Developer mode needed).
 
-## After a reboot (ChatGPT path)
+Details: [skills/connect-web-chat/SKILL.md](skills/connect-web-chat/SKILL.md). (`setup:chatgpt` / `autostart:chatgpt` still work as aliases.)
 
-`setup:chatgpt` is one-time. The connector URL, secret, Funnel config, and `auth.json` all persist. Only the server process stops on reboot:
+The full URL is the password — anyone with it can read your LEARN data. Your laptop must be awake with the server running for the chat app to reach it.
 
-- **Ran `autostart:chatgpt`** → nothing to do; it restarts itself on login.
+## After a reboot (web chat path)
+
+`setup:web` is one-time. The connector URL, secret, Funnel config, and `auth.json` all persist. Only the server process stops on reboot:
+
+- **Ran `autostart:web`** → nothing to do; it restarts itself on login.
 - **Didn't** → `npm run start:http` to bring the server back. (No need to re-run setup.)
 
 Tailscale must be running for Funnel to work (the macOS app auto-starts on login by default).
@@ -67,6 +72,6 @@ Tailscale must be running for Funnel to work (the macOS app auto-starts on login
 ## Notes
 
 - `list_courses` uses the enrollments API, falling back to homepage scraping. Other tools call D2L's REST API through the authenticated session.
-- `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in both Claude and ChatGPT.
+- `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in Claude (Desktop + Claude.ai) and ChatGPT.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
 - Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `PORT`, `LEARN_MCP_TOKEN`.
