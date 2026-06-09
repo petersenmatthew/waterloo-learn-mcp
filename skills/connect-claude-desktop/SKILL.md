@@ -7,7 +7,7 @@ description: Connect the waterloo-learn MCP server to the Claude Desktop app. Us
 
 Registers this project's MCP server with the Claude Desktop app so the LEARN
 tools (`list_courses`, `get_announcements`, `get_content`, `get_topic_file`,
-`get_grades`, `get_upcoming`) appear in Claude Desktop chats. `get_topic_file`
+`get_grades`, `get_assignments`, `get_upcoming`) appear in Claude Desktop chats. `get_topic_file`
 returns lecture slides as images, so asking things like *"summarize my last
 lesson"* or *"what's the diagram on slide 4?"* works without uploading the PDF.
 
@@ -88,7 +88,7 @@ not just closing the window) and reopen it.
 ### 5. Verify
 
 In Claude Desktop, open the tools/connectors menu — `waterloo-learn` should be
-listed with its 6 tools. Or just ask: *"What courses am I taking on LEARN?"* and
+listed with its 7 tools. Or just ask: *"What courses am I taking on LEARN?"* and
 confirm it invokes `list_courses`.
 
 ## Troubleshooting
