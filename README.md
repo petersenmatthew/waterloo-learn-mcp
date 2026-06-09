@@ -20,6 +20,7 @@ npm run login          # browser opens; sign in + approve Duo. Saves auth.json
 | `list_courses` | — | Course names + `ou` IDs |
 | `get_announcements` | `courseId` | Announcements (title, body, date, attachments) |
 | `get_content` | `courseId` | Content modules/topics with URLs |
+| `get_topic_file` | `courseId`, `topicId`, `pages?` | Lecture PDF/PPTX rendered as one image per slide (cap 25; `pages` like `"4"` or `"2-6"`) |
 | `get_grades` | `courseId` | Grade items (grade, points, weight, feedback) |
 | `get_upcoming` | `courseId`, `daysAhead?` | Due dates / events (default 30 days) |
 
@@ -65,5 +66,6 @@ Tailscale must be running for Funnel to work (the macOS app auto-starts on login
 ## Notes
 
 - `list_courses` uses the enrollments API, falling back to homepage scraping. Other tools call D2L's REST API through the authenticated session.
+- `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Image tool results work natively in Claude; ChatGPT's support for them is untested.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
 - Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `PORT`, `LEARN_MCP_TOKEN`.
