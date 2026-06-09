@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# Saved Playwright session — contains live auth cookies. Never commit.
+auth.json
+
+*.log
+.DS_Store
