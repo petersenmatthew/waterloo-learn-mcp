@@ -36,10 +36,11 @@ async function scrapeCourses(): Promise<Course[]> {
       throw new AuthError(`Redirected to ${page.url()} instead of the LEARN homepage. ${LOGIN_HELP}`);
     }
 
-    await page.waitForSelector('d2l-my-courses', { timeout: 20_000 });
-    // The cards load asynchronously inside the widget; wait for the first link.
+    // Best-effort: the My Courses widget tag varies by instance, so don't hard
+    // fail if it's absent — just give the course-card links a chance to render.
+    await page.waitForSelector('d2l-my-courses', { timeout: 8_000 }).catch(() => {});
     await page
-      .waitForSelector('a[href*="/d2l/home/"]', { timeout: 20_000 })
+      .waitForSelector('a[href*="/d2l/home/"]', { timeout: 8_000 })
       .catch(() => {});
 
     const links = await page.locator('a[href*="/d2l/home/"]').all();
@@ -101,15 +102,17 @@ async function coursesFromApi(): Promise<Course[]> {
 }
 
 export async function listCourses(): Promise<Course[]> {
+  // The enrollments API is fast and reliable across instances, so try it first.
+  // Homepage scraping is the fallback (the My Courses widget markup varies).
   try {
-    const scraped = await scrapeCourses();
-    if (scraped.length > 0) return scraped;
-    console.error('Homepage scrape found no course cards; falling back to enrollments API.');
+    const courses = await coursesFromApi();
+    if (courses.length > 0) return courses;
+    console.error('Enrollments API returned no courses; falling back to homepage scrape.');
   } catch (err) {
     if (err instanceof AuthError) throw err;
-    console.error(`Homepage scrape failed (${err}); falling back to enrollments API.`);
+    console.error(`Enrollments API failed (${err}); falling back to homepage scrape.`);
   }
-  return coursesFromApi();
+  return scrapeCourses();
 }
 
 interface RawAnnouncement {
