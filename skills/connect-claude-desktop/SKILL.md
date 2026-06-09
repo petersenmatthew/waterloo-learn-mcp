@@ -1,6 +1,6 @@
 ---
 name: connect-claude-desktop
-description: Connect the waterloo-learn MCP server to the Claude Desktop app. Use when the user wants to register, install, set up, or wire this MCP server into Claude Desktop, or when LEARN tools aren't showing up in Claude Desktop.
+description: Connect the waterloo-learn MCP server to the Claude Desktop app. Use when the user wants to register, install, set up, or wire this MCP server into Claude Desktop.
 ---
 
 # Connect waterloo-learn to Claude Desktop
