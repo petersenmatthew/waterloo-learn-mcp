@@ -87,7 +87,7 @@ curl -s -X POST https://<device>.ts.net/mcp/<token> \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"'
 ```
 
-Six tool names = good. Note there's **no auth header** — the secret is the path
+Seven tool names = good. Note there's **no auth header** — the secret is the path
 segment. (The server also accepts `Authorization: Bearer <token>` or
 `X-Api-Key: <token>` on the plain `/mcp` path for non-ChatGPT clients.)
 
