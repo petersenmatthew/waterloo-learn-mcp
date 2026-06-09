@@ -60,6 +60,45 @@ export async function apiGet<T>(apiPath: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+export interface BinaryResponse {
+  body: Buffer;
+  contentType: string;
+  filename?: string;
+}
+
+/**
+ * GET a D2L endpoint that returns a file (PDF, PPTX, ...) using the saved
+ * session cookies. Same auth handling as apiGet, but returns raw bytes.
+ */
+export async function apiGetBinary(apiPath: string): Promise<BinaryResponse> {
+  const ctx = await getContext();
+  const res = await ctx.request.get(`${BASE_URL}${apiPath}`, { maxRedirects: 0 });
+
+  if (res.status() >= 300 && res.status() < 400) {
+    throw new AuthError(`Session expired (got redirect from ${apiPath}). ${LOGIN_HELP}`);
+  }
+  if (res.status() === 401) {
+    throw new AuthError(`Session rejected (401 from ${apiPath}). ${LOGIN_HELP}`);
+  }
+  if (!res.ok()) {
+    throw new Error(`LEARN file error ${res.status()} for ${apiPath}: ${(await res.text()).slice(0, 300)}`);
+  }
+
+  const contentType = res.headers()['content-type'] ?? '';
+  // A login page served as HTML means the session is gone, not that the topic
+  // is an HTML file — real HTML topics come through the API with a filename.
+  const disposition = res.headers()['content-disposition'] ?? '';
+  const filenameMatch =
+    disposition.match(/filename\*=(?:UTF-8'')?"?([^";]+)"?/i) ??
+    disposition.match(/filename="?([^";]+)"?/i);
+  const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : undefined;
+  if (contentType.includes('text/html') && !filename) {
+    throw new AuthError(`Expected a file from ${apiPath} but got an HTML page — session likely expired. ${LOGIN_HELP}`);
+  }
+
+  return { body: await res.body(), contentType, filename };
+}
+
 // D2L exposes its supported API versions at /d2l/api/versions/. Discover them
 // once so endpoint paths track whatever the Waterloo instance actually runs.
 const FALLBACK_VERSIONS: Record<string, string> = { le: '1.51', lp: '1.31' };

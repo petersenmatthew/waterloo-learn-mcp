@@ -1,18 +1,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAnnouncements, getContent, getGrades, getUpcoming, listCourses } from './d2l.js';
+import { getAnnouncements, getContent, getGrades, getTopicFile, getUpcoming, listCourses } from './d2l.js';
 
-type ToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; mimeType: string; data: string };
+type ToolResult = { content: ContentBlock[]; isError?: boolean };
+
+function errorResult(err: unknown): ToolResult {
+  return {
+    content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }],
+    isError: true,
+  };
+}
 
 async function run(fn: () => Promise<unknown>): Promise<ToolResult> {
   try {
     const result = await fn();
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (err) {
-    return {
-      content: [{ type: 'text', text: err instanceof Error ? err.message : String(err) }],
-      isError: true,
-    };
+    return errorResult(err);
   }
 }
 
@@ -56,6 +63,47 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
     },
     async ({ courseId }) => run(() => getContent(courseId)),
+  );
+
+  server.registerTool(
+    'get_topic_file',
+    {
+      title: 'Get Topic File as Slide Images',
+      description:
+        'Download a lecture file (PDF or PowerPoint) from course content and return each page/slide ' +
+        'as an image you can read — including diagrams and figures. topicId is the `id` of a topic from ' +
+        'get_content. Slide N = page N; pass pages like "4" or "2-6" to fetch specific slides instead of ' +
+        'the whole deck. Use to answer: "Summarize lesson 2", "What is the diagram on slide 4?"',
+      inputSchema: z.object({
+        courseId,
+        topicId: z.string().describe('The topic `id` from get_content, e.g. "1234567"'),
+        pages: z
+          .string()
+          .optional()
+          .describe('Pages/slides to render, e.g. "4", "1-5", or "2,4,7-9". Default: all (capped at 25).'),
+      }),
+    },
+    async ({ courseId, topicId, pages }) => {
+      try {
+        const result = await getTopicFile(courseId, topicId, pages);
+        const header =
+          `${result.filename} — ${result.totalPages} page(s); showing ` +
+          `${result.pages.map((p) => p.page).join(', ')}.` +
+          (result.note ? ` ${result.note}` : '');
+        return {
+          content: [
+            { type: 'text' as const, text: header },
+            ...result.pages.map((p) => ({
+              type: 'image' as const,
+              mimeType: 'image/png',
+              data: p.png.toString('base64'),
+            })),
+          ],
+        };
+      } catch (err) {
+        return errorResult(err);
+      }
+    },
   );
 
   server.registerTool(

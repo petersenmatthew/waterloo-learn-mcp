@@ -28,6 +28,7 @@
   "homepage": "https://github.com/petersenmatthew/waterloo-learn-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "pdf-to-png-converter": "^3.18.0",
     "playwright": "^1.60.0",
     "zod": "^4.4.3"
   },
