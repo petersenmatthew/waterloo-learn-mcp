@@ -1,6 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAnnouncements, getContent, getGrades, getTopicFile, getUpcoming, listCourses } from './d2l.js';
+import {
+  getAnnouncements,
+  getAssignments,
+  getContent,
+  getGrades,
+  getTopicFile,
+  getUpcoming,
+  listCourses,
+} from './d2l.js';
 
 type ContentBlock =
   | { type: 'text'; text: string }
@@ -116,6 +124,19 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
     },
     async ({ courseId }) => run(() => getGrades(courseId)),
+  );
+
+  server.registerTool(
+    'get_assignments',
+    {
+      title: 'Get Assignments',
+      description:
+        'Get assignments (dropbox folders) for a course: due date, instructions, attached problem sheets, ' +
+        'your submission status (submitted/unsubmitted), submitted files, and released feedback/score. ' +
+        'Use to answer: "Have I submitted Assignment 5?", "What is still due?", "What feedback did I get?"',
+      inputSchema: z.object({ courseId }),
+    },
+    async ({ courseId }) => run(() => getAssignments(courseId)),
   );
 
   server.registerTool(
