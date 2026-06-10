@@ -23,9 +23,21 @@ fi
 PID="$(lsof -tiTCP:8787 -sTCP:LISTEN 2>/dev/null || true)"
 if [ -n "$PID" ]; then
   CMD="$(ps -p "$PID" -o command= 2>/dev/null || true)"
+  # The LaunchAgent invokes the server by absolute path; a manual
+  # `npm run start:http` shows the relative "node dist/http.js", so also
+  # accept that when the process's cwd is this project.
+  PID_CWD="$(lsof -a -p "$PID" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
   case "$CMD" in
     *"$ROOT/dist/http.js"*)
       kill "$PID"
+      ;;
+    *dist/http.js*)
+      if [ "$PID_CWD" = "$ROOT" ]; then
+        kill "$PID"
+      else
+        echo "Port 8787 is in use by another process; leaving it alone:"
+        echo "  $CMD"
+      fi
       ;;
     *)
       echo "Port 8787 is in use by another process; leaving it alone:"
