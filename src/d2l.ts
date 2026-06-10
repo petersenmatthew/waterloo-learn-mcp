@@ -190,11 +190,40 @@ export async function getContent(courseId: number) {
 }
 
 const OUTLINE_HOST = 'outline.uwaterloo.ca';
+const OUTLINE_VIEWER_URL = `https://${OUTLINE_HOST}/viewer/`;
+const TERM_RE = /\b(Winter|Spring|Fall)\s+(\d{4})\b/i;
+const COURSE_CODE_RE = /\b[A-Z]{2,}\s*\d{2,4}[A-Z]?\b/g;
 
 export interface CourseOutline {
   url: string;
   title: string;
   text: string;
+}
+
+interface CourseOutlineLookup {
+  codes: string[];
+  term: string | null;
+}
+
+interface ViewerOutlineRow {
+  term: string;
+  course: string;
+  title: string;
+  sections: string;
+  url: string;
+}
+
+function normalizeCourseCode(code: string): string {
+  return code.toUpperCase().replace(/\s+/g, '');
+}
+
+function parseCourseOutlineLookup(courseName: string): CourseOutlineLookup {
+  const termMatch = courseName.match(TERM_RE);
+  const codeMatches = courseName.toUpperCase().match(COURSE_CODE_RE) ?? [];
+  return {
+    codes: [...new Set(codeMatches.map(normalizeCourseCode))],
+    term: termMatch ? `${termMatch[1][0].toUpperCase()}${termMatch[1].slice(1).toLowerCase()} ${termMatch[2]}` : null,
+  };
 }
 
 /** Depth-first search of the TOC for the first link into outline.uwaterloo.ca. */
@@ -214,21 +243,66 @@ function findOutlineUrl(modules: MarshalledModule[]): string | null {
   return null;
 }
 
-/**
- * Fetch the official course outline from outline.uwaterloo.ca. The outline
- * site is SSO-gated separately from LEARN; its session cookie is captured by
- * `npm run login`, so a redirect off-host means that session has expired.
- */
-export async function getCourseOutline(courseId: number): Promise<CourseOutline> {
-  const modules = await getContent(courseId);
-  const outlineUrl = findOutlineUrl(modules);
-  if (!outlineUrl) {
-    throw new Error(
-      `No outline.uwaterloo.ca link found in course ${courseId}'s content. ` +
-        'Some courses upload the outline as a PDF instead — use get_content to look for an outline/syllabus file.',
-    );
-  }
+async function findCourse(courseId: number): Promise<Course | null> {
+  const courses = await listCourses();
+  return courses.find((course) => course.ou === courseId) ?? null;
+}
 
+async function scrapeViewerOutlines(): Promise<ViewerOutlineRow[]> {
+  const page = await newPage();
+  try {
+    await page.goto(OUTLINE_VIEWER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    if (new URL(page.url()).host !== OUTLINE_HOST) {
+      throw new AuthError(
+        `Redirected to ${page.url()} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
+      );
+    }
+
+    await page
+      .waitForSelector('a[href*="/viewer/view/"]', { timeout: 15_000 })
+      .catch(() => {});
+
+    return await page.evaluate(() => {
+      const rows: ViewerOutlineRow[] = [];
+      for (const heading of document.querySelectorAll('h3')) {
+        const term = heading.textContent?.trim() ?? '';
+        const section = heading.closest('div');
+        if (!term || !section) continue;
+
+        for (const row of section.querySelectorAll('tbody tr')) {
+          const cells = [...row.querySelectorAll('td')].map((cell) => cell.textContent?.trim() ?? '');
+          const link = row.querySelector<HTMLAnchorElement>('a[href*="/viewer/view/"]');
+          if (!cells[0] || !link?.href) continue;
+          rows.push({
+            term,
+            course: cells[0],
+            title: cells[1] ?? '',
+            sections: cells[2] ?? '',
+            url: link.href,
+          });
+        }
+      }
+      return rows;
+    });
+  } finally {
+    await page.close();
+  }
+}
+
+async function findOutlineUrlFromViewer(course: Course): Promise<string | null> {
+  const lookup = parseCourseOutlineLookup(course.name);
+  if (lookup.codes.length === 0 || !lookup.term) return null;
+
+  const rows = await scrapeViewerOutlines();
+  const match = rows.find(
+    (row) =>
+      row.term.toLowerCase() === lookup.term?.toLowerCase() &&
+      lookup.codes.includes(normalizeCourseCode(row.course)),
+  );
+  return match?.url ?? null;
+}
+
+async function fetchOutlinePage(outlineUrl: string): Promise<CourseOutline> {
   const page = await newPage();
   try {
     await page.goto(outlineUrl, { waitUntil: 'networkidle', timeout: 60_000 });
@@ -239,10 +313,42 @@ export async function getCourseOutline(courseId: number): Promise<CourseOutline>
     }
     const title = await page.title();
     const raw = await page.evaluate(() => document.body.innerText);
-    return { url: outlineUrl, title, text: raw.replace(/\n{3,}/g, '\n\n').trim() };
+    return { url: page.url(), title, text: raw.replace(/\n{3,}/g, '\n\n').trim() };
   } finally {
     await page.close();
   }
+}
+
+/**
+ * Fetch the official course outline from outline.uwaterloo.ca. The outline
+ * site is SSO-gated separately from LEARN; its session cookie is captured by
+ * `npm run login`, so a redirect off-host means that session has expired.
+ */
+export async function getCourseOutline(courseId: number): Promise<CourseOutline> {
+  const course = await findCourse(courseId);
+  let viewerError: unknown = null;
+  if (course) {
+    try {
+      const viewerOutlineUrl = await findOutlineUrlFromViewer(course);
+      if (viewerOutlineUrl) return fetchOutlinePage(viewerOutlineUrl);
+    } catch (err) {
+      if (err instanceof AuthError) throw err;
+      viewerError = err;
+      console.error(`Outline viewer lookup failed for ${course.name} (${courseId}): ${err}`);
+    }
+  }
+
+  const modules = await getContent(courseId);
+  const outlineUrl = findOutlineUrl(modules);
+  if (outlineUrl) return fetchOutlinePage(outlineUrl);
+
+  const viewerNote =
+    viewerError instanceof Error ? ` Outline viewer lookup also failed: ${viewerError.message}` : '';
+  throw new Error(
+    `No outline.uwaterloo.ca outline found for course ${course?.name ?? courseId}. ` +
+      'The course may not use Outline.uwaterloo.ca, or it may upload the outline as a PDF instead. ' +
+      `Use get_content to look for an outline/syllabus file.${viewerNote}`,
+  );
 }
 
 // Image tokens scale with pixel area, so the render targets a fixed output

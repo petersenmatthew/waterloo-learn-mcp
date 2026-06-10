@@ -30,9 +30,9 @@ await page.waitForURL(
 );
 
 console.log('LEARN session captured.');
-console.log('Fetching an outline.uwaterloo.ca session — approve the second Duo prompt if asked.');
+console.log('Fetching an outline.uwaterloo.ca viewer session — approve the second Duo prompt if asked.');
 try {
-  await page.goto('https://outline.uwaterloo.ca/');
+  await page.goto('https://outline.uwaterloo.ca/viewer/');
   await page.waitForURL((url) => url.host === 'outline.uwaterloo.ca', {
     timeout: 5 * 60 * 1000,
   });
