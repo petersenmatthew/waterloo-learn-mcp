@@ -299,9 +299,11 @@ export function createServer(): McpServer {
       description:
         'Fetch the official course outline (syllabus) from outline.uwaterloo.ca and return its full text. ' +
         'Use to answer: "What is the grading scheme?", "How much is the midterm worth?", "What is the late policy?", ' +
-        '"When are office hours?", "Who is the instructor/TA?", "What textbook do we use?". This is the authoritative ' +
-        'syllabus document, separate from the lecture materials in get_content. Only works for courses that link ' +
-        'their outline on outline.uwaterloo.ca; if none is linked, check get_content for an uploaded PDF outline instead.',
+        '"When are office hours?". Outlines usually include a week-by-week schedule, so also use it to orient ' +
+        'chronologically — "What are we covering this week?", "What did we do last week in calc?", "When do we ' +
+        'reach integrals?" — then call get_content/get_topic_file to pull the matching lecture materials. This is ' +
+        'the authoritative syllabus document, separate from the lecture materials in get_content. If no outline ' +
+        'link exists, check get_content for an uploaded PDF outline instead.',
       inputSchema: z.object({ courseId }),
       outputSchema: outlineOutput,
     },
