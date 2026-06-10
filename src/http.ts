@@ -424,6 +424,39 @@ function validPresentedToken(token: string) {
   return Boolean(oauthToken && oauthToken.expiresAt >= Date.now());
 }
 
+// Remember the clientInfo each token sent in its `initialize` request so later
+// stateless requests (which carry no clientInfo) can still be attributed.
+const mcpClientByToken = new Map<string, string>();
+
+function clientLabelForToken(token: string) {
+  const fromInitialize = mcpClientByToken.get(token);
+  if (fromInitialize) return fromInitialize;
+  const oauthToken = accessTokens.get(token);
+  const registered = oauthToken && clients.get(oauthToken.clientId)?.client_name;
+  if (typeof registered === 'string' && registered) return registered;
+  return 'unknown';
+}
+
+function logMcpMessages(body: unknown, token: string) {
+  const messages = Array.isArray(body) ? body : [body];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'object') continue;
+    const { method, params } = msg as { method?: unknown; params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown } } };
+    if (typeof method !== 'string') continue;
+
+    if (method === 'initialize') {
+      const { name, version } = params?.clientInfo ?? {};
+      if (typeof name === 'string') {
+        mcpClientByToken.set(token, version ? `${name}/${version}` : name);
+      }
+    }
+
+    let detail = method;
+    if (method === 'tools/call' && typeof params?.name === 'string') detail = `tools/call ${params.name}`;
+    console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(token)} ${detail}`);
+  }
+}
+
 const httpServer = createHttpServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
@@ -503,6 +536,11 @@ const httpServer = createHttpServer(async (req, res) => {
 
   try {
     const body = req.method === 'POST' ? await readJsonBody(req) : undefined;
+    if (body !== undefined) {
+      logMcpMessages(body, presented);
+    } else if (req.method === 'GET') {
+      console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(presented)} sse-stream`);
+    }
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
   } catch (err) {
