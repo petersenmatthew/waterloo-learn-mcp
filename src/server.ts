@@ -4,6 +4,7 @@ import {
   getAnnouncements,
   getAssignments,
   getContent,
+  getCourseOutline,
   getGrades,
   getTopicFile,
   getUpcoming,
@@ -128,6 +129,12 @@ const assignmentsOutput = z.object({
         .nullable(),
     }),
   ),
+});
+
+const outlineOutput = z.object({
+  url: z.string(),
+  title: z.string(),
+  text: z.string(),
 });
 
 const upcomingOutput = z.object({
@@ -283,6 +290,23 @@ export function createServer(): McpServer {
       outputSchema: upcomingOutput,
     },
     async ({ courseId, daysAhead }) => runStructured(() => getUpcoming(courseId, daysAhead), (events) => ({ events })),
+  );
+
+  server.registerTool(
+    'get_course_outline',
+    {
+      title: 'Get Course Outline',
+      description:
+        'Fetch the official course outline (syllabus) from outline.uwaterloo.ca and return its full text. ' +
+        'Use to answer: "What is the grading scheme?", "How much is the midterm worth?", "What is the late policy?", ' +
+        '"When are office hours?", "Who is the instructor/TA?", "What textbook do we use?". This is the authoritative ' +
+        'syllabus document, separate from the lecture materials in get_content. Only works for courses that link ' +
+        'their outline on outline.uwaterloo.ca; if none is linked, check get_content for an uploaded PDF outline instead.',
+      inputSchema: z.object({ courseId }),
+      outputSchema: outlineOutput,
+    },
+    async ({ courseId }) =>
+      runStructured(() => getCourseOutline(courseId), (outline) => ({ ...outline })),
   );
 
   return server;
