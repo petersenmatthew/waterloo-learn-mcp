@@ -23,21 +23,30 @@ reserved domain**, and gives a **stable** public address
 (`https://<device>.<tailnet>.ts.net`) that survives reboots. The MCP server runs
 on the user's own laptop; Tailscale's infrastructure provides the public edge.
 
-## Auth: secret-in-URL, because neither app has an API-key option
+## Auth: OAuth for web apps, path secret as a legacy fallback
 
-Both ChatGPT's and Claude.ai's custom-connector **Authentication** options are
-only **OAuth** or **No Auth** — there is **no API-key / bearer field**.
-Implementing OAuth is heavy overkill for a personal tool, and plain "No Auth" on
-a public URL would expose the user's LEARN session to anyone who finds it.
+Web chat apps increasingly expect remote MCP servers to support OAuth discovery,
+dynamic client registration, and bearer tokens. This server implements a small
+personal OAuth flow at the public Funnel origin:
 
-So the token rides in the **URL path** instead: the connector URL is
-`https://<device>.ts.net/mcp/<token>` and the app is set to **No Auth**. The
-server only responds when the path contains the correct secret, so the full URL
-*is* the credential — token-equivalent security with zero OAuth complexity.
+- MCP endpoint: `https://<device>.ts.net/mcp`
+- Protected resource metadata: `/.well-known/oauth-protected-resource/mcp`
+- Authorization server metadata: `/.well-known/oauth-authorization-server`
+- Dynamic registration: `/register`
+- Browser authorization: `/authorize`
+- Token exchange: `/token`
 
-> ⚠️ **Treat the full URL like a password.** Anyone who has it can read that
-> user's LEARN data. Don't paste it into shared chats or commit it. The secret
-> lives in `.env.local` (gitignored).
+During browser authorization, the page asks for the connection code from
+`.env.local` (`LEARN_MCP_TOKEN`). That keeps dynamic registration from becoming
+an open public authorization endpoint.
+
+The old URL style `https://<device>.ts.net/mcp/<token>` still works as a legacy
+fallback for clients that cannot do OAuth, and the server also accepts
+`Authorization: Bearer <token>` or `X-Api-Key: <token>` on `/mcp`.
+
+> ⚠️ **Treat the connection code like a password.** Anyone who has it can
+> authorize access to the user's LEARN data. Don't paste it into shared chats or
+> commit it. The secret lives in `.env.local` (gitignored).
 
 > ℹ️ **The laptop must be on.** The chat app can only reach LEARN while the
 > user's machine is awake and the server + Funnel are running. Inherent to the
@@ -53,29 +62,31 @@ npm run setup:web
 
 `scripts/web-setup.sh` does everything: generates the secret, builds, runs the
 LEARN login if needed (manual Duo), brings Tailscale up, enables Funnel, then
-prints your **connector URL** (with the secret in the path) plus the per-app UI
-steps, and starts the server.
-
-(`npm run setup:chatgpt` is a kept alias for the same script.)
+prints your public Funnel origin plus the connection code, and starts the
+server.
 
 ### Add the connector — ChatGPT (one time, UI — can't be scripted)
 
 1. **Settings → Connectors → Advanced → turn on Developer mode.**
 2. **Add custom connector** → **Connection: Server URL** → paste the URL the
-   script printed (`https://<device>.ts.net/mcp/<token>`).
-3. **Authentication: No Auth.**
-4. Check **"I understand and want to continue"** → **Create**.
-5. Enable **waterloo-learn** from the tools menu in a chat and ask e.g.
+   script printed, using the OAuth MCP path (`https://<device>.ts.net/mcp`).
+3. Choose OAuth if prompted. Leave manual Client ID/Secret blank so the app can
+   use dynamic registration.
+4. When the authorization page opens, paste `LEARN_MCP_TOKEN` from `.env.local`.
+5. Check **"I understand and want to continue"** → **Create**.
+6. Enable **waterloo-learn** from the tools menu in a chat and ask e.g.
    *"What courses am I taking on LEARN?"*
 
 ### Add the connector — Claude.ai (one time, UI — no Developer mode needed)
 
 1. **Settings → Connectors** (also labelled **Customize → Connectors**).
 2. Click **"+"** / **Add custom connector**.
-3. Enter a **name** (`waterloo-learn`) and paste the **URL** the script printed.
-4. Leave **Advanced settings** (OAuth Client ID/Secret) **blank** — the
-   secret-in-path + No Auth handles it. Click **Add**.
-5. Enable **waterloo-learn** in a chat and ask e.g.
+3. Enter a **name** (`waterloo-learn`) and paste the OAuth MCP URL
+   (`https://<device>.ts.net/mcp`).
+4. Leave **Advanced settings** (OAuth Client ID/Secret) **blank** so Claude.ai
+   can use dynamic registration. Click **Add**.
+5. When the authorization page opens, paste `LEARN_MCP_TOKEN` from `.env.local`.
+6. Enable **waterloo-learn** in a chat and ask e.g.
    *"What courses am I taking on LEARN?"*
 
 > Claude.ai's free plan allows **one** custom connector. ChatGPT and Claude.ai
@@ -84,7 +95,7 @@ steps, and starts the server.
 ### Keep it running across reboots (optional)
 
 ```sh
-npm run autostart:web      # alias: npm run autostart:chatgpt
+npm run autostart:web
 ```
 
 Installs a LaunchAgent so the server auto-starts on login and stays alive.
@@ -105,25 +116,32 @@ piece for a hands-off setup.
 
 ```sh
 curl -s https://<device>.ts.net/health                       # → ok
+curl -i -s -X POST https://<device>.ts.net/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"debug","version":"0"}}}' | grep -i 'www-authenticate'
+curl -s https://<device>.ts.net/.well-known/oauth-authorization-server | grep registration_endpoint
 curl -s -X POST https://<device>.ts.net/mcp/<token> \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"'
 ```
 
-Six tool names = good. Note there's **no auth header** — the secret is the path
-segment. (The server also accepts `Authorization: Bearer <token>` or
-`X-Api-Key: <token>` on the plain `/mcp` path for non-web clients.)
+The unauthenticated `/mcp` check should return a `WWW-Authenticate` header with
+OAuth protected-resource metadata. The legacy secret-path `tools/list` check
+should return the tool names.
 
 ## Troubleshooting
 
 - **`tailscale funnel` fails** — Funnel/HTTPS isn't enabled for the tailnet;
   open the link Tailscale prints, enable it, re-run `npm run setup:web`.
-- **App can't connect / 401** — wrong or missing secret in the path, or the
-  server isn't running / laptop asleep. Confirm `/health` returns `ok` from
-  outside, and that the connector URL ends in `/mcp/<the-exact-token>`.
-- **Don't pick OAuth** in either app — this server doesn't implement it; the
-  connect will hang on OAuth discovery. Use **No Auth**.
+- **App can't connect / 401** — confirm `/health` returns `ok` from outside,
+  and that `/.well-known/oauth-authorization-server` returns JSON with
+  `registration_endpoint`.
+- **Claude.ai says it couldn't register with the sign-in service** — make sure
+  the connector URL is `https://<device>.ts.net/mcp` and that manual OAuth
+  Client ID/Secret fields are blank. That lets Claude.ai use dynamic client
+  registration.
 - **Claude.ai: "you've reached your connector limit"** — the free plan allows
   one custom connector; remove an existing one or upgrade.
 - **Tools return "No valid LEARN session"** — run `npm run login` again.

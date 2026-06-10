@@ -76,9 +76,8 @@ rm -f "$ROOT/.funnel.err"
 DNS="$(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
 [ -n "$DNS" ] || die "Couldn't read your Tailscale device name. Check 'tailscale status'."
 BASE="https://$DNS"
-# Web chat connectors (ChatGPT, Claude.ai) offer only OAuth / No Auth — no
-# API-key field — so the secret rides in the URL path and auth is "No Auth".
-URL="$BASE/mcp/$LEARN_MCP_TOKEN"
+URL="$BASE/mcp"
+LEGACY_URL="$BASE/mcp/$LEARN_MCP_TOKEN"
 
 # --- 5. instructions -------------------------------------------------------
 cat <<EOF
@@ -88,29 +87,35 @@ $(bold " waterloo-learn is ready for web chat apps")
 ============================================================
 
   Connector URL :  $URL
-  Authentication:  No Auth   (the secret is in the URL above — keep it private)
+  Authentication:  OAuth / automatic sign-in
+  Connection code: $LEARN_MCP_TOKEN
 
   Same URL works for ChatGPT and Claude.ai. Add it once per app:
 
   ChatGPT (one time):
     1. Settings → Connectors → Advanced → turn on Developer mode
     2. Add custom connector → Connection: Server URL → paste the URL above
-    3. Authentication: No Auth
-    4. Check "I understand and want to continue", click Create
-    5. Enable "waterloo-learn" from the tools menu in a chat.
+    3. Choose OAuth if prompted; leave manual Client ID/Secret blank
+    4. When the authorization page opens, paste the connection code above
+    5. Check "I understand and want to continue", click Create
+    6. Enable "waterloo-learn" from the tools menu in a chat.
 
   Claude.ai (one time — no Developer mode needed):
     1. Settings → Connectors  (a.k.a. Customize → Connectors)
     2. Click "+" / Add custom connector
     3. Name it "waterloo-learn", paste the URL above
-    4. Leave Advanced settings (OAuth) blank, click Add
-    5. Enable "waterloo-learn" in a chat.
+    4. Leave Advanced settings (OAuth Client ID/Secret) blank, click Add
+    5. When the authorization page opens, paste the connection code above
+    6. Enable "waterloo-learn" in a chat.
 
-  Treat the full URL like a password — anyone who has it can read your LEARN
-  data. Don't paste it in shared chats or commit it.
+  Treat the connection code like a password — anyone who has it can authorize
+  access to your LEARN data. Don't paste it in shared chats or commit it.
+  Legacy no-auth URL for clients that cannot do OAuth:
+    $LEGACY_URL
 
   Check it's reachable (from another terminal):
     curl -s $BASE/health        # → ok
+    curl -s $BASE/.well-known/oauth-authorization-server | grep registration_endpoint
 
   The Funnel stays configured across reboots. The server (starting below)
   must be running whenever you want the chat app to reach LEARN.
