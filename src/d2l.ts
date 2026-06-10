@@ -13,6 +13,8 @@ export interface Course {
   name: string;
   ou: number;
   url: string;
+  /** Official course title from outline.uwaterloo.ca, e.g. "Matrices and Linear Systems". */
+  title?: string | null;
 }
 
 function stripHtml(html: string): string {
@@ -289,17 +291,64 @@ async function scrapeViewerOutlines(): Promise<ViewerOutlineRow[]> {
   }
 }
 
+let viewerOutlineCache: { rows: ViewerOutlineRow[]; at: number } | null = null;
+let viewerOutlineFailureAt = 0;
+const VIEWER_CACHE_TTL_MS = 30 * 60 * 1000;
+
+/** Viewer rows, cached so list_courses and get_course_outline share one scrape. */
+async function getViewerOutlines(): Promise<ViewerOutlineRow[]> {
+  if (viewerOutlineCache && Date.now() - viewerOutlineCache.at < VIEWER_CACHE_TTL_MS) {
+    return viewerOutlineCache.rows;
+  }
+  const rows = await scrapeViewerOutlines();
+  viewerOutlineCache = { rows, at: Date.now() };
+  viewerOutlineFailureAt = 0;
+  return rows;
+}
+
 async function findOutlineUrlFromViewer(course: Course): Promise<string | null> {
   const lookup = parseCourseOutlineLookup(course.name);
   if (lookup.codes.length === 0 || !lookup.term) return null;
 
-  const rows = await scrapeViewerOutlines();
+  const rows = await getViewerOutlines();
   const match = rows.find(
     (row) =>
       row.term.toLowerCase() === lookup.term?.toLowerCase() &&
       lookup.codes.includes(normalizeCourseCode(row.course)),
   );
   return match?.url ?? null;
+}
+
+function findViewerRow(rows: ViewerOutlineRow[], lookup: CourseOutlineLookup): ViewerOutlineRow | undefined {
+  const byCode = rows.filter((row) => lookup.codes.includes(normalizeCourseCode(row.course)));
+  // Titles are stable across terms, so any term's row will do when the LEARN
+  // name's term is absent or doesn't match a viewer section.
+  return byCode.find((row) => row.term.toLowerCase() === lookup.term?.toLowerCase()) ?? byCode[0];
+}
+
+/**
+ * Courses enriched with their official titles from the outline.uwaterloo.ca
+ * viewer (LEARN names are just code + term, e.g. "SYDE 114 - Spring 2026").
+ * If the outline session isn't configured or the scrape fails, courses are
+ * returned with title: null rather than erroring.
+ */
+export async function listCoursesWithTitles(): Promise<Course[]> {
+  const courses = await listCourses();
+  let rows: ViewerOutlineRow[] = [];
+  // Remember a failed scrape for the cache TTL so a missing outline session
+  // doesn't add a doomed page load to every list_courses call.
+  if (Date.now() - viewerOutlineFailureAt >= VIEWER_CACHE_TTL_MS) {
+    try {
+      rows = await getViewerOutlines();
+    } catch (err) {
+      viewerOutlineFailureAt = Date.now();
+      console.error(`Outline viewer titles unavailable (${err}); returning LEARN names only.`);
+    }
+  }
+  return courses.map((course) => {
+    const row = findViewerRow(rows, parseCourseOutlineLookup(course.name));
+    return { ...course, title: row?.title.trim() || null };
+  });
 }
 
 async function fetchOutlinePage(outlineUrl: string): Promise<CourseOutline> {

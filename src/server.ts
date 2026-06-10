@@ -8,7 +8,7 @@ import {
   getGrades,
   getTopicFile,
   getUpcoming,
-  listCourses,
+  listCoursesWithTitles,
 } from './d2l.js';
 
 type ContentBlock =
@@ -42,6 +42,7 @@ const courseId = z.number().int().describe('The course org unit (ou) ID from lis
 
 const courseOutput = z.object({
   name: z.string(),
+  title: z.string().nullable().describe('Official course title from outline.uwaterloo.ca, e.g. "Matrices and Linear Systems"; null if unavailable'),
   ou: z.number().int(),
   url: z.string(),
 });
@@ -163,7 +164,7 @@ export function createServer(): McpServer {
       inputSchema: z.object({}),
       outputSchema: listCoursesOutput,
     },
-    async () => runStructured(() => listCourses(), (courses) => ({ courses })),
+    async () => runStructured(() => listCoursesWithTitles(), (courses) => ({ courses })),
   );
 
   server.registerTool(
