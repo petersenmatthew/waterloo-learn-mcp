@@ -80,6 +80,31 @@ OAuth clients and tokens are saved in `oauth.json` so connectors keep working af
 
 Tailscale must be running for Funnel to work (the macOS app auto-starts on login by default).
 
+## Tailscale Funnel reset
+
+If Claude/ChatGPT says it cannot fetch OAuth config or cannot connect to `<device>.ts.net:443`, reset Tailscale Serve/Funnel. This is a tunnel problem, not OAuth.
+
+```sh
+tailscale funnel reset
+tailscale serve reset
+tailscale funnel --bg 8787
+```
+
+Verify:
+
+```sh
+curl --noproxy '*' -i https://<device>.ts.net/health
+curl --noproxy '*' -i https://<device>.ts.net/.well-known/oauth-authorization-server
+curl --noproxy '*' -i https://<device>.ts.net/.well-known/oauth-protected-resource/mcp
+curl --noproxy '*' -i https://<device>.ts.net/mcp
+```
+
+Expected:
+
+- `/health` -> `200 OK` with `ok`
+- OAuth metadata -> `200 OK`
+- `/mcp` -> `401 Unauthorized` when unauthenticated
+
 ## Notes
 
 - `list_courses` uses the enrollments API, falling back to homepage scraping. Other tools call D2L's REST API through the authenticated session.
