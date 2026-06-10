@@ -205,8 +205,7 @@ export function createServer(): McpServer {
         'Download a lecture file (PDF or PowerPoint) from course content and return each page/slide ' +
         'as an image you can read — including diagrams and figures. topicId is the `id` of a topic from ' +
         'get_content. Slide N = page N; pass pages like "4" or "2-6" to fetch specific slides instead of ' +
-        'the whole deck. Use after get_content to answer: "Summarize lesson 2", "What is the diagram on slide 4?", ' +
-        '"what did we do in today\'s tutorial?", or "what is in this week\'s slides?"',
+        'the whole deck. Use after get_content to answer: "Summarize lesson 2", "What is the diagram on slide 4?"',
       inputSchema: z.object({
         courseId,
         topicId: z.string().describe('The topic `id` from get_content, e.g. "1234567"'),
@@ -297,11 +296,11 @@ export function createServer(): McpServer {
     {
       title: 'Get Course Outline',
       description:
-        'Fetch the official course outline (syllabus) from outline.uwaterloo.ca and return its full text. ' +
+        'Fetch the official course outline (syllabus) and return its full text. ' +
         'Use to answer: "What is the grading scheme?", "How much is the midterm worth?", "What is the late policy?", ' +
-        '"When are office hours?". Outlines usually include a week-by-week schedule, so also use it to orient ' +
-        'chronologically — "What are we covering this week?", "What did we do last week in calc?", "When do we ' +
-        'reach integrals?" — then call get_content/get_topic_file to pull the matching lecture materials. This is ' +
+        '"When are office hours?". Outlines include a week-by-week schedule, use it to orient ' +
+        'chronologically — "What are we covering this week?", "What did we do last week in calc?"'+
+        'then call get_content/get_topic_file to pull the matching lecture materials. This is ' +
         'the authoritative syllabus document, separate from the lecture materials in get_content. If no outline ' +
         'link exists, check get_content for an uploaded PDF outline instead.',
       inputSchema: z.object({ courseId }),
