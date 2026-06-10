@@ -2,9 +2,11 @@
  * One-time (per session expiry) login helper.
  *
  * Opens a headed browser at learn.uwaterloo.ca. Sign in with your WatIAM
- * credentials and approve the Duo 2FA push. Once you land on the LEARN
- * homepage, the session cookies are saved to auth.json and the MCP server
- * can run headless without touching 2FA again until the session expires.
+ * credentials and approve the Duo 2FA push. The script then visits
+ * outline.uwaterloo.ca so course outlines work too — approve a second Duo
+ * prompt if one appears. Once both are done, the session cookies are saved
+ * to auth.json and the MCP server can run headless without touching 2FA
+ * again until the session expires.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +28,21 @@ await page.waitForURL(
   (url) => url.href.startsWith(BASE_URL) && url.pathname.startsWith('/d2l/home'),
   { timeout: 5 * 60 * 1000 },
 );
+
+console.log('LEARN session captured.');
+console.log('Fetching an outline.uwaterloo.ca session — approve the second Duo prompt if asked.');
+try {
+  await page.goto('https://outline.uwaterloo.ca/');
+  await page.waitForURL((url) => url.host === 'outline.uwaterloo.ca', {
+    timeout: 5 * 60 * 1000,
+  });
+  console.log('Outline session captured.');
+} catch (err) {
+  console.warn(
+    `Could not capture an outline.uwaterloo.ca session (${err}). ` +
+      'get_course_outline will not work until the next login; all other tools are unaffected.',
+  );
+}
 
 await context.storageState({ path: AUTH_FILE });
 console.log(`Session saved to ${AUTH_FILE}`);
