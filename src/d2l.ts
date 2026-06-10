@@ -189,7 +189,7 @@ export async function getContent(courseId: number) {
   return (toc.Modules ?? []).map(marshalModule);
 }
 
-const MAX_PAGES = 25;
+const MAX_PAGES = 75;
 const VIEWPORT_SCALE = 2;
 
 export interface TopicFileResult {
@@ -312,7 +312,6 @@ export async function getTopicFile(
       `Rendered the first ${MAX_PAGES} of ${totalPages} pages. ` +
       `Call again with pages="${pagesToProcess[MAX_PAGES - 1] + 1}-${totalPages}" for the rest.`;
   }
-
   const rendered = await pdfToPng(pdf, { viewportScale: VIEWPORT_SCALE, pagesToProcess });
   return {
     filename,

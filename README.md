@@ -20,7 +20,7 @@ npm run login          # browser opens; sign in + approve Duo. Saves auth.json
 | `list_courses` | — | Course names + `ou` IDs |
 | `get_announcements` | `courseId` | Announcements (title, body, date, attachments) |
 | `get_content` | `courseId` | Content modules/topics with URLs |
-| `get_topic_file` | `courseId`, `topicId`, `pages?` | Lecture PDF/PPTX rendered as one image per slide (cap 25; `pages` like `"4"` or `"2-6"`) |
+| `get_topic_file` | `courseId`, `topicId`, `pages?` | Lecture PDF/PPTX rendered as one image per slide (cap 75; `pages` like `"4"` or `"2-6"`) |
 | `get_grades` | `courseId` | Grade items (grade, points, weight, feedback) |
 | `get_assignments` | `courseId` | Assignments with due dates, instructions, your submission status + files, released feedback |
 | `get_upcoming` | `courseId`, `daysAhead?` | Due dates / events (default 30 days) |
