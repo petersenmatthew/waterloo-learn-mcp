@@ -245,8 +245,15 @@ export async function getCourseOutline(courseId: number): Promise<CourseOutline>
   }
 }
 
-const MAX_PAGES = 75;
-const VIEWPORT_SCALE = 2;
+// Image tokens scale with pixel area, so the render targets a fixed output
+// size instead of a fixed multiplier (intrinsic PDF page sizes vary wildly).
+// ~800px on the long edge ≈ scale 1.0 for letter pages: ~650 tokens/page,
+// still legible for handwritten lecture notes.
+const TARGET_LONG_EDGE_PX = 800;
+// 30 pages ≈ 20k tokens, fitting Claude Code's stock 25k MAX_MCP_OUTPUT_TOKENS
+// with headroom — past the cap, the failure mode is the explicit continuation
+// note below, not the client silently dropping trailing pages.
+const MAX_PAGES = 30;
 
 export interface TopicFileResult {
   filename: string;
@@ -353,8 +360,10 @@ export async function getTopicFile(
     );
   }
 
-  const meta = await pdfToPng(pdf, { returnMetadataOnly: true });
+  const meta = await pdfToPng(pdf, { returnMetadataOnly: true, viewportScale: 1 });
   const totalPages = meta.length;
+  const longEdgePts = Math.max(meta[0]?.width ?? 0, meta[0]?.height ?? 0);
+  const viewportScale = longEdgePts > 0 ? Math.min(2, TARGET_LONG_EDGE_PX / longEdgePts) : 1;
 
   let pagesToProcess = pagesSpec ? parsePages(pagesSpec) : Array.from({ length: totalPages }, (_, i) => i + 1);
   pagesToProcess = pagesToProcess.filter((p) => p <= totalPages);
@@ -368,7 +377,7 @@ export async function getTopicFile(
       `Rendered the first ${MAX_PAGES} of ${totalPages} pages. ` +
       `Call again with pages="${pagesToProcess[MAX_PAGES - 1] + 1}-${totalPages}" for the rest.`;
   }
-  const rendered = await pdfToPng(pdf, { viewportScale: VIEWPORT_SCALE, pagesToProcess });
+  const rendered = await pdfToPng(pdf, { viewportScale, pagesToProcess });
   return {
     filename,
     totalPages,

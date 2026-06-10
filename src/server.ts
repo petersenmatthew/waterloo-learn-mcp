@@ -212,7 +212,7 @@ export function createServer(): McpServer {
         pages: z
           .string()
           .optional()
-          .describe('Pages/slides to render, e.g. "4", "1-5", or "2,4,7-9". Default: all (capped at 75).'),
+          .describe('Pages/slides to render, e.g. "4", "1-5", or "2,4,7-9". Default: the whole document (capped at 30 per call; the response notes how to fetch the rest).'),
       }),
       outputSchema: topicFileOutput,
     },
