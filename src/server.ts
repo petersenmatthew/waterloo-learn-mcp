@@ -165,7 +165,9 @@ export function createServer(): McpServer {
       title: 'Get Announcements',
       description:
         'Get announcements/news posted by instructors for a course. Returns title, body, posted date, ' +
-        'and attachments. Use to answer: "Any new announcements?", "What did the professor post?"',
+        'and attachments. Use to answer: "Any new announcements?", "What did the professor post?" ' +
+        'Announcements are not a complete record of lectures, tutorials, labs, or weekly work; for ' +
+        '"what did we do today/in class/this week?" also call get_content, then get_topic_file for relevant files.',
       inputSchema: z.object({ courseId }),
       outputSchema: announcementsOutput,
     },
@@ -178,7 +180,10 @@ export function createServer(): McpServer {
       title: 'Get Course Content',
       description:
         'List the content modules and materials (lectures, slides, files, links) for a course as a ' +
-        'nested table of contents. Use to answer: "What materials are in week 3?", "Where are the lecture slides?"',
+        'nested table of contents. Use this as the primary source for course activity questions like ' +
+        '"what did we do today?", "what was in today\'s tutorial/lab/lecture?", "what is this week\'s work?", ' +
+        '"what materials are in week 3?", or "where are the lecture slides?". After identifying relevant topics, ' +
+        'call get_topic_file to inspect PDFs or PowerPoints.',
       inputSchema: z.object({ courseId }),
       outputSchema: contentOutput,
     },
@@ -193,7 +198,8 @@ export function createServer(): McpServer {
         'Download a lecture file (PDF or PowerPoint) from course content and return each page/slide ' +
         'as an image you can read — including diagrams and figures. topicId is the `id` of a topic from ' +
         'get_content. Slide N = page N; pass pages like "4" or "2-6" to fetch specific slides instead of ' +
-        'the whole deck. Use to answer: "Summarize lesson 2", "What is the diagram on slide 4?"',
+        'the whole deck. Use after get_content to answer: "Summarize lesson 2", "What is the diagram on slide 4?", ' +
+        '"what did we do in today\'s tutorial?", or "what is in this week\'s slides?"',
       inputSchema: z.object({
         courseId,
         topicId: z.string().describe('The topic `id` from get_content, e.g. "1234567"'),
@@ -267,7 +273,8 @@ export function createServer(): McpServer {
       title: 'Get Upcoming Due Dates',
       description:
         'Get upcoming calendar events and due dates (assignments, quizzes, exams) for a course. ' +
-        'Use to answer: "What is due this week?", "When is the next deadline?"',
+        'Use to answer: "What is due this week?", "When is the next deadline?", or "what work is due today?". ' +
+        'This does not list lecture/tutorial materials; pair it with get_content for "what did we do today/this week?"',
       inputSchema: z.object({
         courseId,
         daysAhead: z.number().int().min(1).max(365).optional()
