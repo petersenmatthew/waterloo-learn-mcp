@@ -13,8 +13,7 @@
     "dev:http": "tsx src/http.ts",
     "setup:web": "bash scripts/web-setup.sh",
     "autostart:web": "bash scripts/web-autostart.sh",
-    "setup:chatgpt": "bash scripts/web-setup.sh",
-    "autostart:chatgpt": "bash scripts/web-autostart.sh"
+    "stop:web": "bash scripts/web-stop.sh"
   },
   "repository": {
     "type": "git",

@@ -2,7 +2,7 @@
 
 MCP server exposing your [Waterloo LEARN](https://learn.uwaterloo.ca) courses to AI apps. LEARN sits behind WatIAM + Duo, so auth is split out: you log in once in a real browser, the session is saved to `auth.json`, and the server runs headless off that until it expires.
 
-`auth.json` and `.env.local` hold secrets. Both are gitignored — treat them like passwords.
+`auth.json`, `oauth.json`, and `.env.local` hold secrets. They are gitignored — treat them like passwords.
 
 ## Install
 
@@ -44,21 +44,31 @@ Local, no tunnel, no exposed session. Details: [skills/connect-claude-desktop/SK
 
 ## Connect to a web chat (ChatGPT or Claude.ai)
 
-ChatGPT and Claude.ai are cloud-hosted — they reach your server remotely over HTTPS, unlike Claude Desktop (local). This exposes one URL over **Tailscale Funnel** (free, no VPS, stable URL) that **both apps share**:
+ChatGPT and Claude.ai connect over HTTPS through Tailscale Funnel:
 
 ```sh
-npm run setup:web       # builds, enables Funnel, prints your connector URL + per-app steps
-npm run autostart:web   # optional: keep server running across reboots
+npm run setup:web
+npm run start:http
+npm run autostart:web   # optional: start on login
+npm run stop:web        # stop autostart and free port 8787
 ```
 
-It prints a URL like `https://<device>.ts.net/mcp/<secret>`. Add it as a **custom connector** with **No Auth** (neither app has an API-key field, so the secret rides in the path):
+Use this connector URL:
+
+```text
+https://<device>.ts.net/mcp
+```
+
+Use OAuth. Leave OAuth Client ID and Client Secret blank. When the authorization page opens, paste `LEARN_MCP_TOKEN` from `.env.local`.
 
 - **ChatGPT** → Settings → Connectors → **Developer mode** → Add custom connector → Server URL.
-- **Claude.ai** → Settings → Connectors → **"+"** → name + URL (no Developer mode needed).
+- **Claude.ai** → Settings → Connectors → **"+"** → name + URL.
 
-Details: [skills/connect-web-chat/SKILL.md](skills/connect-web-chat/SKILL.md). (`setup:chatgpt` / `autostart:chatgpt` still work as aliases.)
+Details: [skills/connect-web-chat/SKILL.md](skills/connect-web-chat/SKILL.md).
 
-The full URL is the password — anyone with it can read your LEARN data. Your laptop must be awake with the server running for the chat app to reach it.
+Treat `LEARN_MCP_TOKEN` like a password. The legacy URL `https://<device>.ts.net/mcp/<secret>` still works for clients that cannot use OAuth.
+
+OAuth clients and tokens are saved in `oauth.json` so connectors keep working after server restarts.
 
 ## After a reboot (web chat path)
 
