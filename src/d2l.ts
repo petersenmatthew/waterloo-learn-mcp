@@ -189,6 +189,62 @@ export async function getContent(courseId: number) {
   return (toc.Modules ?? []).map(marshalModule);
 }
 
+const OUTLINE_HOST = 'outline.uwaterloo.ca';
+
+export interface CourseOutline {
+  url: string;
+  title: string;
+  text: string;
+}
+
+/** Depth-first search of the TOC for the first link into outline.uwaterloo.ca. */
+function findOutlineUrl(modules: MarshalledModule[]): string | null {
+  for (const mod of modules) {
+    for (const topic of mod.topics) {
+      if (!topic.url) continue;
+      try {
+        if (new URL(topic.url).host === OUTLINE_HOST) return topic.url;
+      } catch {
+        // unparseable URL — skip
+      }
+    }
+    const nested = findOutlineUrl(mod.modules);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+/**
+ * Fetch the official course outline from outline.uwaterloo.ca. The outline
+ * site is SSO-gated separately from LEARN; its session cookie is captured by
+ * `npm run login`, so a redirect off-host means that session has expired.
+ */
+export async function getCourseOutline(courseId: number): Promise<CourseOutline> {
+  const modules = await getContent(courseId);
+  const outlineUrl = findOutlineUrl(modules);
+  if (!outlineUrl) {
+    throw new Error(
+      `No outline.uwaterloo.ca link found in course ${courseId}'s content. ` +
+        'Some courses upload the outline as a PDF instead — use get_content to look for an outline/syllabus file.',
+    );
+  }
+
+  const page = await newPage();
+  try {
+    await page.goto(outlineUrl, { waitUntil: 'networkidle', timeout: 60_000 });
+    if (new URL(page.url()).host !== OUTLINE_HOST) {
+      throw new AuthError(
+        `Redirected to ${page.url()} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
+      );
+    }
+    const title = await page.title();
+    const raw = await page.evaluate(() => document.body.innerText);
+    return { url: outlineUrl, title, text: raw.replace(/\n{3,}/g, '\n\n').trim() };
+  } finally {
+    await page.close();
+  }
+}
+
 const MAX_PAGES = 75;
 const VIEWPORT_SCALE = 2;
 
