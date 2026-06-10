@@ -4,6 +4,9 @@ dist/
 # Saved Playwright session — contains live auth cookies. Never commit.
 auth.json
 
+# OAuth clients/tokens issued to web chat connectors. Never commit.
+oauth.json
+
 # Local secrets/config for the auto-start installer (token, ngrok domain).
 .env.local
 
