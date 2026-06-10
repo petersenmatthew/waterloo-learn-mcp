@@ -172,9 +172,7 @@ export function createServer(): McpServer {
       title: 'Get Announcements',
       description:
         'Get announcements/news posted by instructors for a course. Returns title, body, posted date, ' +
-        'and attachments. Use to answer: "Any new announcements?", "What did the professor post?" ' +
-        'Announcements are not a complete record of lectures, tutorials, labs, or weekly work; for ' +
-        '"what did we do today/in class/this week?" also call get_content, then get_topic_file for relevant files.',
+        'and attachments. Use to answer: "Any new announcements?", "What did the professor post?" ',
       inputSchema: z.object({ courseId }),
       outputSchema: announcementsOutput,
     },
@@ -296,13 +294,13 @@ export function createServer(): McpServer {
     {
       title: 'Get Course Outline',
       description:
-        'Fetch the official course outline (syllabus) and return its full text. ' +
+        'Fetch the official syllabus and return its full text. ' +
         'Use to answer: "What is the grading scheme?", "How much is the midterm worth?", "What is the late policy?", ' +
-        '"When are office hours?". Outlines include a week-by-week schedule, use it to orient ' +
-        'chronologically — "What are we covering this week?", "What did we do last week in calc?"'+
-        'then call get_content/get_topic_file to pull the matching lecture materials. This is ' +
-        'the authoritative syllabus document, separate from the lecture materials in get_content. If no outline ' +
-        'link exists, check get_content for an uploaded PDF outline instead.',
+        'Use this tool WHENEVER user asks about content with chronological language,' +
+        'like "today", "this week", etc.' +
+        'Outlines have a week-by-week schedule, ALWAYS use it to orient chronologically — ' +
+        'then call get_content & get_topic_file to pull matching lecture materials. If no outline ' +
+        'link exists, check get_content',
       inputSchema: z.object({ courseId }),
       outputSchema: outlineOutput,
     },
