@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { pdfToPng } from 'pdf-to-png-converter';
 import { BASE_URL, LOGIN_HELP, OUTLINE_CACHE_DIR } from './config.js';
-import { apiGet, apiGetBinary, apiVersion, AuthError, getContext, newPage } from './session.js';
+import { apiGet, apiGetBinary, apiVersion, AuthError, newPage, sessionGet } from './session.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -458,10 +458,9 @@ function parsePublishedDate(html: string): string | null {
  */
 async function fetchPublishedDate(outlineUrl: string): Promise<string | null> {
   try {
-    const ctx = await getContext();
-    const resp = await ctx.request.get(outlineUrl, { maxRedirects: 0 });
-    if (resp.status() !== 200) return null;
-    return parsePublishedDate(await resp.text());
+    const resp = await sessionGet(outlineUrl);
+    if (resp.status !== 200) return null;
+    return parsePublishedDate(resp.text);
   } catch {
     return null;
   }
