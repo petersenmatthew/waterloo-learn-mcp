@@ -13,7 +13,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Locator, type Page } from 'playwright';
+import { refreshOutlineCache } from '../src/d2l.js';
 import { loadEnvLocal } from '../src/env.js';
+import { closeBrowser } from '../src/session.js';
 
 loadEnvLocal();
 
@@ -153,21 +155,44 @@ await page.waitForURL(
 
 console.log('LEARN session captured.');
 console.log('Fetching an outline.uwaterloo.ca viewer session — approve the second Duo prompt if asked.');
+let outlineSessionCaptured = false;
 try {
   await page.goto('https://outline.uwaterloo.ca/viewer/');
   await page.waitForURL((url) => url.host === 'outline.uwaterloo.ca', {
     timeout: 5 * 60 * 1000,
   });
+  outlineSessionCaptured = true;
   console.log('Outline session captured.');
 } catch (err) {
   console.warn(
     `Could not capture an outline.uwaterloo.ca session (${err}). ` +
-      'get_course_outline will not work until the next login; all other tools are unaffected.',
+      'Cached outlines will still work, but live outline refresh is skipped.',
   );
 }
 
 await context.storageState({ path: AUTH_FILE });
 console.log(`Session saved to ${AUTH_FILE}`);
+
+if (outlineSessionCaptured) {
+  console.log('Refreshing local course outline cache...');
+  try {
+    const result = await refreshOutlineCache();
+    console.log(
+      `Outline cache refresh complete: ${result.fetched} fetched, ` +
+        `${result.skipped} skipped, ${result.failed} failed.`,
+    );
+    for (const item of result.results) {
+      if (item.status !== 'fetched') {
+        console.warn(`${item.status.toUpperCase()}: ${item.courseName} (${item.courseId}) ${item.message ?? ''}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`Could not refresh local outline cache (${err}). Existing cached outlines are unchanged.`);
+  } finally {
+    await closeBrowser();
+  }
+}
+
 console.log('You can close this message; the MCP server will now work headless.');
 
 await browser.close();

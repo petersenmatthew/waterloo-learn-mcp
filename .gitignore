@@ -10,6 +10,9 @@ oauth.json
 # Local secrets/config for the auto-start installer (token, ngrok domain).
 .env.local
 
+# Cached course outline HTML/text. Treat as private course material.
+cache/
+
 *.log
 .DS_Store
 logs/
