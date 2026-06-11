@@ -173,9 +173,9 @@ try {
 console.log('Fetching WatCard session...');
 let watcardSessionCaptured = false;
 try {
-  await page.goto('https://watcard.uwaterloo.ca/');
-  // WatCard redirects through WatIAM, then to the TouchNet portal
-  await page.waitForURL((url) => url.hostname.includes('touchnet') || url.hostname.includes('watcard'), {
+  // Navigate directly to the TouchNet portal (will redirect through WatIAM/Duo if needed)
+  await page.goto('https://secure.touchnet.net/C22566_oneweb');
+  await page.waitForURL((url) => url.hostname.includes('touchnet'), {
     timeout: 5 * 60 * 1000,
   });
   watcardSessionCaptured = true;

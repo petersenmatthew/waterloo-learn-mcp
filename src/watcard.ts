@@ -33,7 +33,8 @@ function parseAmount(amountStr: string): number {
 export async function getWatCardBalances(): Promise<WatCardBalance[]> {
   const page = await newPage();
   try {
-    await page.goto(`${WATCARD_BASE_URL}/Deposit/Home/Balances`, {
+    // Navigate directly to the Deposit/Funds page
+    await page.goto(`${WATCARD_BASE_URL}/Deposit`, {
       waitUntil: 'domcontentloaded',
     });
 
@@ -45,7 +46,7 @@ export async function getWatCardBalances(): Promise<WatCardBalance[]> {
     }
 
     // Wait for the balance table to load
-    await page.waitForSelector('table.table-base', { timeout: 10_000 });
+    await page.waitForSelector('table.table-base', { timeout: 30_000 });
 
     const balances = await page.evaluate(() => {
       const rows = document.querySelectorAll('table.table-base tbody tr');
@@ -121,7 +122,7 @@ export async function getWatCardTransactions(
 
     // Wait for transaction table
     await page.waitForSelector('#transaction-history-result-table', {
-      timeout: 10_000,
+      timeout: 30_000,
     }).catch(() => {});
 
     const transactions = await page.evaluate((maxLimit) => {
