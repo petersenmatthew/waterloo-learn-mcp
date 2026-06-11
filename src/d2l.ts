@@ -339,57 +339,60 @@ async function findCourse(courseId: number): Promise<Course | null> {
   return courses.find((course) => course.ou === courseId) ?? null;
 }
 
-async function scrapeViewerOutlines(): Promise<ViewerOutlineRow[]> {
-  const page = await newPage();
-  try {
-    await page.goto(OUTLINE_VIEWER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    if (new URL(page.url()).host !== OUTLINE_HOST) {
-      throw new AuthError(
-        `Redirected to ${page.url()} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
-      );
-    }
+/** UWaterloo term codes: "1" + 2-digit year + month digit (1=Jan, 5=May, 9=Sep). */
+const TERM_SEASONS: Record<string, string> = { '1': 'Winter', '5': 'Spring', '9': 'Fall' };
 
-    await page
-      .waitForSelector('a[href*="/viewer/view/"]', { timeout: 15_000 })
-      .catch(() => {});
+function termCodeToLabel(code: string): string {
+  const m = code.match(/^1(\d\d)([159])$/);
+  if (!m) return code;
+  return `${TERM_SEASONS[m[2]]} ${2000 + Number(m[1])}`;
+}
 
-    return await page.evaluate(() => {
-      const rows: ViewerOutlineRow[] = [];
-      for (const heading of document.querySelectorAll('h3')) {
-        const term = heading.textContent?.trim() ?? '';
-        const section = heading.closest('div');
-        if (!term || !section) continue;
+interface ViewerSearchRow {
+  term: string;
+  courses: string;
+  sections: string;
+  title: string;
+  url: string;
+}
 
-        for (const row of section.querySelectorAll('tbody tr')) {
-          const cells = [...row.querySelectorAll('td')].map((cell) => cell.textContent?.trim() ?? '');
-          const link = row.querySelector<HTMLAnchorElement>('a[href*="/viewer/view/"]');
-          if (!cells[0] || !link?.href) continue;
-          rows.push({
-            term,
-            course: cells[0],
-            title: cells[1] ?? '',
-            sections: cells[2] ?? '',
-            url: link.href,
-          });
-        }
-      }
-      return rows;
-    });
-  } finally {
-    await page.close();
+/**
+ * The viewer page is an SPA whose data comes from /viewer/api/search/ — a
+ * plain cookie-authed GET returns every outline as JSON, so no browser render
+ * is needed. An expired outline session redirects the request to SSO.
+ */
+async function fetchViewerOutlines(): Promise<ViewerOutlineRow[]> {
+  const res = await sessionGet(`${OUTLINE_VIEWER_URL}api/search/?q=`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (res.status >= 300 && res.status < 400) {
+    throw new AuthError(
+      `Redirected from ${OUTLINE_VIEWER_URL} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
+    );
   }
+  if (res.status !== 200 || !(res.headers.get('content-type') ?? '').includes('json')) {
+    throw new Error(`Outline viewer search failed (${res.status}): ${res.text.slice(0, 200)}`);
+  }
+  const rows = JSON.parse(res.text) as ViewerSearchRow[];
+  return rows.map((row) => ({
+    term: termCodeToLabel(row.term),
+    course: row.courses,
+    title: row.title,
+    sections: row.sections,
+    url: new URL(row.url, OUTLINE_VIEWER_URL).href,
+  }));
 }
 
 let viewerOutlineCache: { rows: ViewerOutlineRow[]; at: number } | null = null;
 let viewerOutlineFailureAt = 0;
 const VIEWER_CACHE_TTL_MS = 30 * 60 * 1000;
 
-/** Viewer rows, cached so list_courses and get_course_outline share one scrape. */
+/** Viewer rows, cached so list_courses and get_course_outline share one fetch. */
 async function getViewerOutlines(): Promise<ViewerOutlineRow[]> {
   if (viewerOutlineCache && Date.now() - viewerOutlineCache.at < VIEWER_CACHE_TTL_MS) {
     return viewerOutlineCache.rows;
   }
-  const rows = await scrapeViewerOutlines();
+  const rows = await fetchViewerOutlines();
   viewerOutlineCache = { rows, at: Date.now() };
   viewerOutlineFailureAt = 0;
   return rows;
