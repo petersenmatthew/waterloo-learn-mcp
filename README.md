@@ -116,7 +116,7 @@ Expected:
 ## Notes
 
 - `list_courses` uses the enrollments API, falling back to homepage scraping. Other tools call D2L's REST API through the authenticated session.
-- `get_course_outline` reads `cache/outlines/` first. If a course is not cached, it checks Outline.uwaterloo.ca's enrolled-course viewer, then falls back to outline links posted in LEARN content. If neither exists, look for an uploaded outline/syllabus PDF in `get_content`.
+- `get_course_outline` reads `cache/outlines/` first. Cached outlines are checked against the published revision date on Outline.uwaterloo.ca (a cheap HTTP probe, at most once per 30 minutes per course) and automatically refetched when the instructor publishes a new revision. If a course is not cached, it checks Outline.uwaterloo.ca's enrolled-course viewer, then falls back to outline links posted in LEARN content. If neither exists, look for an uploaded outline/syllabus PDF in `get_content`.
 - `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in Claude (Desktop + Claude.ai) and ChatGPT.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
 - Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `LEARN_OUTLINE_CACHE_DIR`, `PORT`, `LEARN_MCP_TOKEN`, `WATIAM_USERNAME`, `WATIAM_PASSWORD`, `WATIAM_LOGIN_DOMAIN`.

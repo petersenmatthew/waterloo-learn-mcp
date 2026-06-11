@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { pdfToPng } from 'pdf-to-png-converter';
 import { BASE_URL, LOGIN_HELP, OUTLINE_CACHE_DIR } from './config.js';
-import { apiGet, apiGetBinary, apiVersion, AuthError, newPage } from './session.js';
+import { apiGet, apiGetBinary, apiVersion, AuthError, getContext, newPage } from './session.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -204,10 +204,12 @@ export interface CourseOutline {
 
 interface CourseOutlineSnapshot extends CourseOutline {
   html: string;
+  /** Revision date shown on the outline page ("May 12, 2026"); null if not found. */
+  publishedAt: string | null;
 }
 
 interface CachedCourseOutline extends CourseOutlineSnapshot {
-  schemaVersion: 1;
+  schemaVersion: 2;
   courseId: number;
   courseName: string | null;
   fetchedAt: string;
@@ -250,17 +252,18 @@ function isCachedCourseOutline(value: unknown, courseId: number): value is Cache
   if (!value || typeof value !== 'object') return false;
   const outline = value as Partial<CachedCourseOutline>;
   return (
-    outline.schemaVersion === 1 &&
+    outline.schemaVersion === 2 &&
     outline.courseId === courseId &&
     typeof outline.url === 'string' &&
     typeof outline.title === 'string' &&
     typeof outline.text === 'string' &&
     typeof outline.html === 'string' &&
-    typeof outline.fetchedAt === 'string'
+    typeof outline.fetchedAt === 'string' &&
+    (typeof outline.publishedAt === 'string' || outline.publishedAt === null)
   );
 }
 
-async function readCachedOutline(courseId: number): Promise<CourseOutline | null> {
+async function readCachedOutline(courseId: number): Promise<CachedCourseOutline | null> {
   try {
     const raw = await fs.readFile(outlineCachePath(courseId), 'utf8');
     const parsed = JSON.parse(raw) as unknown;
@@ -268,7 +271,7 @@ async function readCachedOutline(courseId: number): Promise<CourseOutline | null
       console.warn(`Ignoring invalid cached outline for course ${courseId}.`);
       return null;
     }
-    return cachedOutlineToResult(parsed);
+    return parsed;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
       console.warn(`Could not read cached outline for course ${courseId}: ${err}`);
@@ -284,13 +287,14 @@ async function writeCachedOutline(
 ): Promise<void> {
   await fs.mkdir(OUTLINE_CACHE_DIR, { recursive: true });
   const cache: CachedCourseOutline = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     courseId,
     courseName,
     url: outline.url,
     title: outline.title,
     text: outline.text,
     html: outline.html,
+    publishedAt: outline.publishedAt,
     fetchedAt: new Date().toISOString(),
   };
   const file = outlineCachePath(courseId);
@@ -436,6 +440,33 @@ export async function listCoursesWithTitles(): Promise<Course[]> {
   });
 }
 
+/**
+ * Revision date from the outline page, e.g. 'Published May 12, 2026 (latest)'
+ * → "May 12, 2026". Single-revision outlines omit the "(latest)" suffix, so
+ * match the date shape itself.
+ */
+function parsePublishedDate(html: string): string | null {
+  const m = html.match(/revision-current[^>]*>\s*Published\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+  return m ? m[1].replace(/\s+/g, ' ').trim() : null;
+}
+
+/**
+ * The outline page is server-rendered, so a plain GET with the session cookies
+ * is enough to read the current revision date — no browser render needed.
+ * Returns null when the check is impossible (expired session redirects to SSO,
+ * network error), so callers fall back to the cached copy.
+ */
+async function fetchPublishedDate(outlineUrl: string): Promise<string | null> {
+  try {
+    const ctx = await getContext();
+    const resp = await ctx.request.get(outlineUrl, { maxRedirects: 0 });
+    if (resp.status() !== 200) return null;
+    return parsePublishedDate(await resp.text());
+  } catch {
+    return null;
+  }
+}
+
 async function fetchOutlinePageSnapshot(outlineUrl: string): Promise<CourseOutlineSnapshot> {
   const page = await newPage();
   try {
@@ -448,7 +479,13 @@ async function fetchOutlinePageSnapshot(outlineUrl: string): Promise<CourseOutli
     const title = await page.title();
     const raw = await page.evaluate(() => document.body.innerText);
     const html = await page.content();
-    return { url: page.url(), title, text: raw.replace(/\n{3,}/g, '\n\n').trim(), html };
+    return {
+      url: page.url(),
+      title,
+      text: raw.replace(/\n{3,}/g, '\n\n').trim(),
+      html,
+      publishedAt: parsePublishedDate(html),
+    };
   } finally {
     await page.close();
   }
@@ -480,6 +517,12 @@ async function fetchLiveCourseOutline(courseId: number, course: Course | null): 
   );
 }
 
+// Cached outlines never expire on their own; instead each read is allowed one
+// cheap revision-date probe per interval, and a full refetch only happens when
+// the outline page reports a new published revision.
+const REVISION_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+const revisionCheckedAt = new Map<number, number>();
+
 /**
  * Fetch the official course outline from outline.uwaterloo.ca. The outline
  * site is SSO-gated separately from LEARN; its session cookie is captured by
@@ -487,10 +530,32 @@ async function fetchLiveCourseOutline(courseId: number, course: Course | null): 
  */
 export async function getCourseOutline(courseId: number): Promise<CourseOutline> {
   const cached = await readCachedOutline(courseId);
-  if (cached) return cached;
+  if (cached) {
+    const lastChecked = revisionCheckedAt.get(courseId) ?? 0;
+    if (Date.now() - lastChecked < REVISION_CHECK_INTERVAL_MS) {
+      return cachedOutlineToResult(cached);
+    }
+    const published = await fetchPublishedDate(cached.url);
+    revisionCheckedAt.set(courseId, Date.now());
+    if (published === null || published === cached.publishedAt) {
+      return cachedOutlineToResult(cached);
+    }
+    console.error(
+      `Outline for course ${courseId} has a new revision (published ${published}); refetching.`,
+    );
+  }
 
   const course = await findCourse(courseId);
-  const outline = await fetchLiveCourseOutline(courseId, course);
+  let outline: CourseOutlineSnapshot;
+  try {
+    outline = await fetchLiveCourseOutline(courseId, course);
+  } catch (err) {
+    if (cached) {
+      console.warn(`Refetch of updated outline for course ${courseId} failed (${err}); serving cached copy.`);
+      return cachedOutlineToResult(cached);
+    }
+    throw err;
+  }
   await writeCachedOutline(courseId, course?.name ?? null, outline).catch((err) => {
     console.warn(`Could not cache outline for course ${courseId}: ${err}`);
   });
