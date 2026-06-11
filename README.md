@@ -13,6 +13,14 @@ npm run build
 npm run login          # browser opens; sign in + approve Duo. Saves auth.json
 ```
 
+Optional: `npm run login` can autofill your WatIAM username/password before
+waiting for Duo. Add both values to `.env.local` or export them in your shell:
+
+```sh
+WATIAM_USERNAME=your-watiam-user
+WATIAM_PASSWORD=your-watiam-password
+```
+
 ## Tools
 
 | Tool | Args | Returns |
@@ -111,7 +119,7 @@ Expected:
 - `get_course_outline` first checks Outline.uwaterloo.ca's enrolled-course viewer, then falls back to outline links posted in LEARN content. If neither exists, look for an uploaded outline/syllabus PDF in `get_content`.
 - `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in Claude (Desktop + Claude.ai) and ChatGPT.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
-- Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `PORT`, `LEARN_MCP_TOKEN`.
+- Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `PORT`, `LEARN_MCP_TOKEN`, `WATIAM_USERNAME`, `WATIAM_PASSWORD`, `WATIAM_LOGIN_DOMAIN`.
 
 ---
 
