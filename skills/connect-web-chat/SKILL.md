@@ -57,10 +57,10 @@ fallback for clients that cannot do OAuth, and the server also accepts
 ```sh
 cd <project-root>
 npm install
-npm run setup:web
+npm run setup:tailscale
 ```
 
-`scripts/web-setup.sh` does everything: generates the secret, builds, runs the
+`scripts/tailscale-setup.sh` does everything: generates the secret, builds, runs the
 LEARN login if needed (manual Duo), brings Tailscale up, enables Funnel, then
 prints your public Funnel origin plus the connection code, and starts the
 server.
@@ -95,7 +95,7 @@ server.
 ### Keep it running across reboots (optional)
 
 ```sh
-npm run autostart:web
+npm run autostart:http
 ```
 
 Installs a LaunchAgent so the server auto-starts on login and stays alive.
@@ -134,7 +134,7 @@ should return the tool names.
 ## Troubleshooting
 
 - **`tailscale funnel` fails** — Funnel/HTTPS isn't enabled for the tailnet;
-  open the link Tailscale prints, enable it, re-run `npm run setup:web`.
+  open the link Tailscale prints, enable it, re-run `npm run setup:tailscale`.
 - **App can't connect / 401** — confirm `/health` returns `ok` from outside,
   and that `/.well-known/oauth-authorization-server` returns JSON with
   `registration_endpoint`.
@@ -145,4 +145,4 @@ should return the tool names.
 - **Claude.ai: "you've reached your connector limit"** — the free plan allows
   one custom connector; remove an existing one or upgrade.
 - **Tools return "No valid LEARN session"** — run `npm run login` again.
-- **Want it hands-off after reboot** — `npm run autostart:web`.
+- **Want it hands-off after reboot** — `npm run autostart:http`.

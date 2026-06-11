@@ -10,10 +10,12 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "start:http": "node dist/http.js",
+    "start:ngrok": "bash scripts/ngrok-start.sh",
     "dev:http": "tsx src/http.ts",
-    "setup:web": "bash scripts/web-setup.sh",
-    "autostart:web": "bash scripts/web-autostart.sh",
-    "stop:web": "bash scripts/web-stop.sh"
+    "setup:tailscale": "bash scripts/tailscale-setup.sh",
+    "setup:ngrok": "bash scripts/ngrok-setup.sh",
+    "autostart:http": "bash scripts/http-autostart.sh",
+    "stop:http": "bash scripts/http-stop.sh"
   },
   "repository": {
     "type": "git",

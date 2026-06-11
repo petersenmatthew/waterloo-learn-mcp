@@ -51,15 +51,83 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`, then r
 
 Local, no tunnel, no exposed session. Details: [skills/connect-claude-desktop/SKILL.md](skills/connect-claude-desktop/SKILL.md).
 
-## Connect to a web chat (ChatGPT or Claude.ai)
+## Connect to a web chat with ngrok
 
-ChatGPT and Claude.ai connect over HTTPS through Tailscale Funnel:
+ChatGPT and Claude.ai are cloud-hosted, so they need a public HTTPS URL for
+this MCP server. The default path is ngrok: the MCP server runs on your laptop,
+and ngrok publishes it at a stable HTTPS dev domain.
+
+First, install and sign in to ngrok:
 
 ```sh
-npm run setup:web
+brew install ngrok/ngrok/ngrok
+ngrok config add-authtoken <your-ngrok-authtoken>
+```
+
+Get your free dev domain from the [ngrok dashboard](https://dashboard.ngrok.com/domains),
+then run the one-time setup:
+
+```sh
+npm run setup:ngrok
+```
+
+When prompted, paste the domain only, for example `example.ngrok-free.app`.
+The script saves it to `.env.local`, starts the local HTTP server, starts ngrok,
+and prints your connector URL:
+
+```text
+https://<your-ngrok-domain>/mcp
+```
+
+Use OAuth. Leave OAuth Client ID and Client Secret blank. When the authorization
+page opens, paste the connection code printed by the setup script
+(`LEARN_MCP_TOKEN` from `.env.local`).
+
+- **ChatGPT** → Settings → Connectors → **Developer mode** → Add custom connector → Server URL.
+- **Claude.ai** → Settings → Connectors → **"+"** → name + URL.
+
+OAuth clients and tokens are saved in `oauth.json` so connectors keep working after server restarts.
+Treat `LEARN_MCP_TOKEN` like a password. The legacy URL
+`https://<your-ngrok-domain>/mcp/<secret>` still works for clients that cannot
+use OAuth.
+
+### After a reboot with ngrok
+
+Your ngrok domain, MCP token, OAuth clients, and LEARN session all persist.
+After restarting your computer, run:
+
+```sh
+npm run start:ngrok
+```
+
+Leave that terminal running while you want ChatGPT or Claude.ai to reach LEARN.
+
+To check the tunnel from another terminal:
+
+```sh
+curl -s -H 'ngrok-skip-browser-warning: true' https://<your-ngrok-domain>/health
+curl -s -H 'ngrok-skip-browser-warning: true' https://<your-ngrok-domain>/.well-known/oauth-authorization-server
+```
+
+Expected:
+
+- `/health` -> `ok`
+- OAuth metadata -> JSON with a `registration_endpoint`
+
+ngrok may show a browser warning during OAuth. Click through once. Command-line
+checks can skip it with the `ngrok-skip-browser-warning` header shown above.
+
+## Tailscale alternative
+
+Tailscale Funnel also works if you prefer it. It has a nice reboot story because
+Funnel persists its tunnel config; only the local HTTP server needs to be
+running.
+
+```sh
+npm run setup:tailscale
 npm run start:http
-npm run autostart:web   # optional: start on login
-npm run stop:web        # stop autostart and free port 8787
+npm run autostart:http  # optional: start HTTP server on login
+npm run stop:http       # stop HTTP autostart and free port 8787
 ```
 
 Use this connector URL:
@@ -68,29 +136,13 @@ Use this connector URL:
 https://<device>.ts.net/mcp
 ```
 
-Use OAuth. Leave OAuth Client ID and Client Secret blank. When the authorization page opens, paste `LEARN_MCP_TOKEN` from `.env.local`.
+After a reboot with Tailscale:
 
-- **ChatGPT** → Settings → Connectors → **Developer mode** → Add custom connector → Server URL.
-- **Claude.ai** → Settings → Connectors → **"+"** → name + URL.
+- **Ran `autostart:http`** -> nothing to do; it restarts itself on login.
+- **Didn't** -> `npm run start:http` to bring the server back.
 
-Details: [skills/connect-web-chat/SKILL.md](skills/connect-web-chat/SKILL.md).
-
-Treat `LEARN_MCP_TOKEN` like a password. The legacy URL `https://<device>.ts.net/mcp/<secret>` still works for clients that cannot use OAuth.
-
-OAuth clients and tokens are saved in `oauth.json` so connectors keep working after server restarts.
-
-## After a reboot (web chat path)
-
-`setup:web` is one-time. The connector URL, secret, Funnel config, and `auth.json` all persist. Only the server process stops on reboot:
-
-- **Ran `autostart:web`** → nothing to do; it restarts itself on login.
-- **Didn't** → `npm run start:http` to bring the server back. (No need to re-run setup.)
-
-Tailscale must be running for Funnel to work (the macOS app auto-starts on login by default).
-
-## Tailscale Funnel reset
-
-If Claude/ChatGPT says it cannot fetch OAuth config or cannot connect to `<device>.ts.net:443`, reset Tailscale Serve/Funnel. This is a tunnel problem, not OAuth.
+If Claude/ChatGPT cannot fetch OAuth config or cannot connect to
+`<device>.ts.net:443`, reset Tailscale Serve/Funnel:
 
 ```sh
 tailscale funnel reset
@@ -98,25 +150,10 @@ tailscale serve reset
 tailscale funnel --bg 8787
 ```
 
-Verify:
-
-```sh
-curl --noproxy '*' -i https://<device>.ts.net/health
-curl --noproxy '*' -i https://<device>.ts.net/.well-known/oauth-authorization-server
-curl --noproxy '*' -i https://<device>.ts.net/.well-known/oauth-protected-resource/mcp
-curl --noproxy '*' -i https://<device>.ts.net/mcp
-```
-
-Expected:
-
-- `/health` -> `200 OK` with `ok`
-- OAuth metadata -> `200 OK`
-- `/mcp` -> `401 Unauthorized` when unauthenticated
-
 ## Notes
 
 - `list_courses` uses the enrollments API, falling back to homepage scraping. Other tools call D2L's REST API through the authenticated session.
-- `get_course_outline` reads `cache/outlines/` first. Cached outlines are checked against the published revision date on Outline.uwaterloo.ca (a cheap HTTP probe, at most once per 30 minutes per course) and automatically refetched when the instructor publishes a new revision. If a course is not cached, it checks Outline.uwaterloo.ca's enrolled-course viewer, then falls back to outline links posted in LEARN content. If neither exists, look for an uploaded outline/syllabus PDF in `get_content`.
+- `get_course_outline` reads `cache/outlines/` first. Cached outlines are checked against the published revision date and automatically refetched when the instructor publishes a new revision. If a course is not cached, it checks Outline.uwaterloo.ca's enrolled-course viewer, then falls back to outline links posted in LEARN content. If neither exists, look for an uploaded outline/syllabus PDF in `get_content`.
 - `get_topic_file` returns slides as **images** so the model can read diagrams, not just text. PDFs need nothing extra; PowerPoint topics additionally need [LibreOffice](https://www.libreoffice.org) (`brew install --cask libreoffice`) for the PPTX→PDF step. Works in Claude (Desktop + Claude.ai) and ChatGPT.
 - **"No valid LEARN session"** (or tools failing after weeks) = session expired → `npm run login` again. Independent of reboots.
 - Override with env vars: `LEARN_BASE_URL`, `LEARN_AUTH_FILE`, `LEARN_OUTLINE_CACHE_DIR`, `PORT`, `LEARN_MCP_TOKEN`, `WATIAM_USERNAME`, `WATIAM_PASSWORD`, `WATIAM_LOGIN_DOMAIN`.

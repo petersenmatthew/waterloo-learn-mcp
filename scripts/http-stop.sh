@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Stop the web MCP HTTP server and unload its LaunchAgent if installed.
+# Stop the MCP HTTP server and unload its LaunchAgent if installed.
 #
 set -euo pipefail
 
@@ -46,4 +46,4 @@ if [ -n "$PID" ]; then
   esac
 fi
 
-echo "Stopped web MCP server autostart."
+echo "Stopped MCP HTTP server autostart."

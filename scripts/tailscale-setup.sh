@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # One-command setup to make waterloo-learn reachable by web chat apps (ChatGPT,
-# Claude.ai) via Tailscale Funnel. Run:  npm run setup:web
+# Claude.ai) via Tailscale Funnel. Run: npm run setup:tailscale
 #
 # What it does:
 #   1. Generates a bearer token (saved to .env.local)
@@ -120,7 +120,7 @@ $(bold " waterloo-learn is ready for web chat apps")
   The Funnel stays configured across reboots. The server (starting below)
   must be running whenever you want the chat app to reach LEARN.
   To make the server auto-start on login and stay up:
-    npm run autostart:web
+    npm run autostart:http
 
 ============================================================
 
