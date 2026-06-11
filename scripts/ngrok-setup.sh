@@ -42,6 +42,41 @@ normalize_domain() {
   printf '%s' "$value"
 }
 
+print_connector_summary() {
+  cat <<EOF
+
+============================================================
+$(bold " waterloo-learn MCP over ngrok")
+============================================================
+
+  Paste this connector URL into ChatGPT or Claude.ai:
+    $URL
+
+  Connection code:
+    $LEARN_MCP_TOKEN
+
+  Leave this terminal running. Ctrl+C stops ngrok and the local MCP server
+  started by this script.
+
+============================================================
+
+EOF
+}
+
+write_connector_file() {
+  cat >"$ROOT/.ngrok-connector.txt" <<EOF
+Connector URL: $URL
+Connection code: $LEARN_MCP_TOKEN
+
+Add this URL in ChatGPT or Claude.ai:
+$URL
+
+Use OAuth if prompted. Leave Client ID and Client Secret blank.
+When the authorization page opens, paste the connection code above.
+EOF
+  chmod 600 "$ROOT/.ngrok-connector.txt"
+}
+
 # --- 1. token + .env.local -------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
   cp "$ROOT/.env.local.example" "$ENV_FILE" 2>/dev/null || : > "$ENV_FILE"
@@ -160,4 +195,7 @@ else
 fi
 
 say "Starting ngrok — leave this running. Ctrl+C to stop."
-ngrok http --url "$BASE" "$PORT"
+write_connector_file
+print_connector_summary
+say "Saved connector details to .ngrok-connector.txt"
+ngrok http --url "$BASE" "$PORT" --log stdout --log-format logfmt

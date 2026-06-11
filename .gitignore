@@ -9,6 +9,7 @@ oauth.json
 
 # Local secrets/config for the auto-start installer (token, ngrok domain).
 .env.local
+.ngrok-connector.txt
 
 # Cached course outline HTML/text. Treat as private course material.
 cache/

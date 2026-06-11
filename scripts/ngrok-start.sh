@@ -13,6 +13,34 @@ say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!\033[0m  %s\n' "$*"; }
 die()  { printf '\033[1;31mx\033[0m  %s\n' "$*" >&2; exit 1; }
 
+print_connector_summary() {
+  cat <<EOF
+
+============================================================
+waterloo-learn MCP over ngrok
+============================================================
+
+  Paste this connector URL into ChatGPT or Claude.ai:
+    $URL
+
+  Leave this terminal running. Ctrl+C stops ngrok and the local MCP server
+  started by this script.
+
+============================================================
+
+EOF
+}
+
+write_connector_file() {
+  cat >"$ROOT/.ngrok-connector.txt" <<EOF
+Connector URL: $URL
+
+Add this URL in ChatGPT or Claude.ai:
+$URL
+EOF
+  chmod 600 "$ROOT/.ngrok-connector.txt"
+}
+
 [ -f "$ENV_FILE" ] || die ".env.local is missing. Run: npm run setup:ngrok"
 
 # shellcheck disable=SC1090
@@ -67,4 +95,7 @@ else
 fi
 
 say "Starting ngrok"
-ngrok http --url "$BASE" "$PORT"
+write_connector_file
+print_connector_summary
+say "Saved connector URL to .ngrok-connector.txt"
+ngrok http --url "$BASE" "$PORT" --log stdout --log-format logfmt
