@@ -17,16 +17,43 @@ export interface Course {
   title?: string | null;
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
+function decodeEntities(text: string): string {
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;|&apos;/g, "'")
     .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
+function stripHtml(html: string): string {
+  return decodeEntities(html.replace(/<[^>]+>/g, ' '))
     .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Multi-line plain text from server-rendered HTML — an approximation of the
+ * browser's innerText, good enough for outline pages where structure comes
+ * from headings, paragraphs, lists, and tables.
+ */
+function htmlToText(html: string): string {
+  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html;
+  const text = body
+    .replace(/<(script|style|noscript|template)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(td|th)>/gi, '\t')
+    .replace(/<\/(p|div|section|article|li|tr|h[1-6]|table|thead|tbody|ul|ol|dt|dd|header|footer|main|nav|blockquote)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ');
+  return decodeEntities(text)
+    .split('\n')
+    .map((line) => line.replace(/[ \t ]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -469,28 +496,36 @@ async function fetchPublishedDate(outlineUrl: string): Promise<string | null> {
   }
 }
 
+/**
+ * Outline pages are server-rendered, so a plain cookie-authed GET returns the
+ * full content. An expired outline session answers 200 with a "Redirecting…"
+ * shell that bounces to SSO via JavaScript, so detect that marker rather than
+ * relying on an HTTP redirect.
+ */
 async function fetchOutlinePageSnapshot(outlineUrl: string): Promise<CourseOutlineSnapshot> {
-  const page = await newPage();
-  try {
-    await page.goto(outlineUrl, { waitUntil: 'networkidle', timeout: 60_000 });
-    if (new URL(page.url()).host !== OUTLINE_HOST) {
-      throw new AuthError(
-        `Redirected to ${page.url()} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
-      );
-    }
-    const title = await page.title();
-    const raw = await page.evaluate(() => document.body.innerText);
-    const html = await page.content();
-    return {
-      url: page.url(),
-      title,
-      text: raw.replace(/\n{3,}/g, '\n\n').trim(),
-      html,
-      publishedAt: parsePublishedDate(html),
-    };
-  } finally {
-    await page.close();
+  const res = await sessionGet(outlineUrl, { maxRedirects: 5 });
+  if (new URL(res.url).host !== OUTLINE_HOST) {
+    throw new AuthError(
+      `Redirected to ${res.url} — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
+    );
   }
+  const html = res.text;
+  if (res.status !== 200) {
+    throw new Error(`Outline page ${outlineUrl} returned HTTP ${res.status}.`);
+  }
+  if (html.includes('data-redirect-url')) {
+    throw new AuthError(
+      `${outlineUrl} served an SSO redirect page — the outline.uwaterloo.ca session is missing or expired. ${LOGIN_HELP}`,
+    );
+  }
+  const title = stripHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '');
+  return {
+    url: res.url,
+    title,
+    text: htmlToText(html),
+    html,
+    publishedAt: parsePublishedDate(html),
+  };
 }
 
 async function fetchLiveCourseOutline(courseId: number, course: Course | null): Promise<CourseOutlineSnapshot> {
