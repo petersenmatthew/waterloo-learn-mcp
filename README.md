@@ -1,6 +1,6 @@
 # waterloo-learn-mcp
 
-MCP server exposing your [Waterloo LEARN](https://learn.uwaterloo.ca) courses to AI apps. LEARN sits behind WatIAM + Duo, so auth is split out: you log in once in a real browser, the session is saved to `auth.json`, and the server runs headless off that until it expires.
+MCP server exposing your [Waterloo LEARN](https://learn.uwaterloo.ca) courses to AI apps. LEARN sits behind WatIAM + Duo, so auth is split out: you log in once in a real browser, the session is saved to `auth.json`, and the server reuses those cookies over plain HTTP until they expire. (A headless browser is only launched for rare scrape fallbacks, so `npx playwright install chromium` is still part of setup.)
 
 `auth.json`, `oauth.json`, and `.env.local` hold secrets. They are gitignored — treat them like passwords.
 
