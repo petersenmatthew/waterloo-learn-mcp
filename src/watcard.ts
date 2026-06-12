@@ -94,7 +94,8 @@ export async function getWatCardTransactions(
 ): Promise<WatCardTransaction[]> {
   const page = await newPage();
   try {
-    await page.goto(`${WATCARD_BASE_URL}/TransactionHistory/Transactions`, {
+    // Navigate to dashboard first
+    await page.goto(`${WATCARD_BASE_URL}/Account/Dashboard`, {
       waitUntil: 'domcontentloaded',
     });
 
@@ -105,25 +106,22 @@ export async function getWatCardTransactions(
       );
     }
 
-    // If date filters provided, fill in the form
-    if (fromDate || toDate) {
-      // Fill date fields if provided
-      if (fromDate) {
-        await page.fill('input[name="From"]', fromDate).catch(() => {});
-      }
-      if (toDate) {
-        await page.fill('input[name="To"]', toDate).catch(() => {});
-      }
+    // Click on Transactions dropdown
+    await page.locator('a.dropdown-toggle:has-text("Transactions")').first().click();
+    await page.waitForTimeout(300);
 
-      // Click "View History" button
-      await page.click('button:has-text("View History")').catch(() => {});
-      await page.waitForTimeout(1000); // Wait for results to load
-    }
+    // Click on Transaction History link
+    await page.locator('a[href="/C22566_oneweb/TransactionHistory/Transactions"]').first().click();
+    await page.waitForLoadState('domcontentloaded');
 
-    // Wait for transaction table
+    // Click "View History" button to load transactions with default dates
+    // (Date filtering is disabled for now as the form fields are unreliable)
+    await page.click('button:has-text("View History")');
+
+    // Wait for the transaction table to appear
     await page.waitForSelector('#transaction-history-result-table', {
       timeout: 30_000,
-    }).catch(() => {});
+    });
 
     const transactions = await page.evaluate((maxLimit) => {
       const rows = document.querySelectorAll('#transaction-history-result-table tbody tr');
