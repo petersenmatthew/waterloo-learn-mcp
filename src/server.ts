@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import type { ToolCallLogEvent } from './terminal.js';
 import { getAnnouncements } from './learn/announcements.js';
 import { getAssignments } from './learn/assignments.js';
 import { getContent } from './learn/content.js';
@@ -13,6 +14,10 @@ type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'image'; mimeType: string; data: string };
 type ToolResult = { content: ContentBlock[]; structuredContent?: Record<string, unknown>; isError?: boolean };
+type ServerOptions = {
+  clientLabel?: string;
+  onToolCall?: (event: ToolCallLogEvent) => void;
+};
 
 function errorResult(err: unknown): ToolResult {
   return {
@@ -34,6 +39,34 @@ async function runStructured<T>(
   } catch (err) {
     return errorResult(err);
   }
+}
+
+function withToolLog<Args>(
+  options: ServerOptions | undefined,
+  tool: string,
+  handler: (args: Args) => Promise<ToolResult>,
+) {
+  return async (args: Args): Promise<ToolResult> => {
+    const startedAt = Date.now();
+    try {
+      const result = await handler(args);
+      options?.onToolCall?.({
+        client: options.clientLabel ?? 'unknown',
+        tool,
+        status: result.isError ? 'error' : 'ok',
+        durationMs: Date.now() - startedAt,
+      });
+      return result;
+    } catch (err) {
+      options?.onToolCall?.({
+        client: options.clientLabel ?? 'unknown',
+        tool,
+        status: 'error',
+        durationMs: Date.now() - startedAt,
+      });
+      throw err;
+    }
+  };
 }
 
 const courseId = z.number().int().describe('The course org unit (ou) ID from list_courses, e.g. 123456');
@@ -149,7 +182,7 @@ const upcomingOutput = z.object({
 });
 
 /** Build a fresh McpServer with all LEARN tools registered. */
-export function createServer(): McpServer {
+export function createServer(options: ServerOptions = {}): McpServer {
   const server = new McpServer({ name: 'waterloo-learn', version: '0.1.0' });
 
   server.registerTool(
@@ -162,7 +195,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({}),
       outputSchema: listCoursesOutput,
     },
-    async () => runStructured(() => listCoursesWithTitles(), (courses) => ({ courses })),
+    withToolLog(options, 'list_courses', async () =>
+      runStructured(() => listCoursesWithTitles(), (courses) => ({ courses }))),
   );
 
   server.registerTool(
@@ -175,7 +209,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
       outputSchema: announcementsOutput,
     },
-    async ({ courseId }) => runStructured(() => getAnnouncements(courseId), (announcements) => ({ announcements })),
+    withToolLog(options, 'get_announcements', async ({ courseId }) =>
+      runStructured(() => getAnnouncements(courseId), (announcements) => ({ announcements }))),
   );
 
   server.registerTool(
@@ -191,7 +226,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
       outputSchema: contentOutput,
     },
-    async ({ courseId }) => runStructured(() => getContent(courseId), (modules) => ({ modules })),
+    withToolLog(options, 'get_content', async ({ courseId }) =>
+      runStructured(() => getContent(courseId), (modules) => ({ modules }))),
   );
 
   server.registerTool(
@@ -213,7 +249,7 @@ export function createServer(): McpServer {
       }),
       outputSchema: topicFileOutput,
     },
-    async ({ courseId, topicId, pages }) => {
+    withToolLog(options, 'get_topic_file', async ({ courseId, topicId, pages }) => {
       try {
         const result = await getTopicFile(courseId, topicId, pages);
         const structuredContent = {
@@ -240,7 +276,7 @@ export function createServer(): McpServer {
       } catch (err) {
         return errorResult(err);
       }
-    },
+    }),
   );
 
   server.registerTool(
@@ -253,7 +289,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
       outputSchema: gradesOutput,
     },
-    async ({ courseId }) => runStructured(() => getGrades(courseId), (grades) => ({ grades })),
+    withToolLog(options, 'get_grades', async ({ courseId }) =>
+      runStructured(() => getGrades(courseId), (grades) => ({ grades }))),
   );
 
   server.registerTool(
@@ -267,7 +304,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
       outputSchema: assignmentsOutput,
     },
-    async ({ courseId }) => runStructured(() => getAssignments(courseId), (assignments) => ({ assignments })),
+    withToolLog(options, 'get_assignments', async ({ courseId }) =>
+      runStructured(() => getAssignments(courseId), (assignments) => ({ assignments }))),
   );
 
   server.registerTool(
@@ -285,7 +323,8 @@ export function createServer(): McpServer {
       }),
       outputSchema: upcomingOutput,
     },
-    async ({ courseId, daysAhead }) => runStructured(() => getUpcoming(courseId, daysAhead), (events) => ({ events })),
+    withToolLog(options, 'get_upcoming', async ({ courseId, daysAhead }) =>
+      runStructured(() => getUpcoming(courseId, daysAhead), (events) => ({ events }))),
   );
 
   server.registerTool(
@@ -303,8 +342,8 @@ export function createServer(): McpServer {
       inputSchema: z.object({ courseId }),
       outputSchema: outlineOutput,
     },
-    async ({ courseId }) =>
-      runStructured(() => getCourseOutline(courseId), (outline) => ({ ...outline })),
+    withToolLog(options, 'get_course_outline', async ({ courseId }) =>
+      runStructured(() => getCourseOutline(courseId), (outline) => ({ ...outline }))),
   );
 
   return server;

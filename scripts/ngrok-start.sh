@@ -9,27 +9,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 ENV_FILE="$ROOT/.env.local"
 
-say()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m!\033[0m  %s\n' "$*"; }
-die()  { printf '\033[1;31mx\033[0m  %s\n' "$*" >&2; exit 1; }
-
-print_connector_summary() {
-  cat <<EOF
-
-============================================================
-waterloo-learn MCP over ngrok
-============================================================
-
-  Paste this connector URL into ChatGPT or Claude.ai:
-    $URL
-
-  Leave this terminal running. Ctrl+C stops ngrok and the local MCP server
-  started by this script.
-
-============================================================
-
-EOF
-}
+. "$ROOT/scripts/terminal-ui.sh"
+die() { term_die "$*"; }
+warn() { term_warn "$*"; }
 
 write_connector_file() {
   cat >"$ROOT/.ngrok-connector.txt" <<EOF
@@ -47,6 +29,7 @@ EOF
 set -a; . "$ENV_FILE" 2>/dev/null || true; set +a
 
 PORT="${PORT:-8787}"
+MCP_PATH="${LEARN_MCP_PATH:-/mcp}"
 DOMAIN="${LEARN_MCP_NGROK_DOMAIN:-${NGROK_DOMAIN:-}}"
 DOMAIN="${DOMAIN#http://}"
 DOMAIN="${DOMAIN#https://}"
@@ -56,21 +39,18 @@ DOMAIN="${DOMAIN%%/*}"
 command -v ngrok >/dev/null 2>&1 || die "ngrok isn't installed. On macOS: brew install ngrok/ngrok/ngrok"
 
 BASE="https://$DOMAIN"
-URL="$BASE/mcp"
+URL="$BASE$MCP_PATH"
+
+term_banner "ngrok" "http://127.0.0.1:$PORT$MCP_PATH" "$URL"
 
 if [ "${LEARN_MCP_SKIP_AUTH_CHECK:-}" != "1" ]; then
-  say "Checking saved LEARN session"
-  npm run -s check:auth || die "LEARN session check failed. If the network is fine, run: npm run login"
+  term_step "auth" "checking saved LEARN session"
+  AUTH_OUTPUT="$(npm run -s check:auth 2>&1)" || {
+    printf '%s\n' "$AUTH_OUTPUT" >&2
+    die "LEARN session check failed. If the network is fine, run: npm run login"
+  }
+  term_ok "auth" "session valid"
 fi
-
-cat <<EOF
-
-Starting waterloo-learn MCP over ngrok:
-  Connector URL: $URL
-
-Leave this terminal running. Ctrl+C stops the tunnel.
-
-EOF
 
 cleanup() {
   if [ "${STARTED_SERVER:-0}" = "1" ] && [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
@@ -81,15 +61,15 @@ trap cleanup EXIT INT TERM
 
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   if [ "$(curl -fsS "http://localhost:$PORT/health" 2>/dev/null || true)" = "ok" ]; then
-    warn "Port $PORT is already serving the MCP health check; reusing that server."
+    warn "reusing existing MCP server on port $PORT; activity logs are wherever that server was started"
     STARTED_SERVER=0
   else
     lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >&2 || true
     die "Port $PORT is already in use by another process. Stop it, or set PORT=8788 in .env.local and re-run."
   fi
 else
-  say "Starting local MCP server on port $PORT"
-  node dist/http.js &
+  term_step "server" "starting local MCP server on port $PORT"
+  LEARN_MCP_PRETTY_LOGS=1 node dist/http.js &
   SERVER_PID="$!"
   STARTED_SERVER=1
   sleep 1
@@ -99,8 +79,12 @@ else
   fi
 fi
 
-say "Starting ngrok"
 write_connector_file
-print_connector_summary
-say "Saved connector URL to .ngrok-connector.txt"
-ngrok http --url "$BASE" "$PORT" --log stdout --log-format logfmt
+term_ok "config" "saved connector URL to .ngrok-connector.txt"
+term_step "tunnel" "starting ngrok; leave this terminal open"
+if [ "${LEARN_MCP_DEBUG:-}" = "1" ]; then
+  term_warn "debug logging enabled"
+  ngrok http --url "$BASE" "$PORT" --log stdout --log-format logfmt --log-level info
+else
+  ngrok http --url "$BASE" "$PORT" --log stdout --log-format term --log-level warn
+fi
