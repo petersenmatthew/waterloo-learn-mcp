@@ -130,8 +130,7 @@ URL="$BASE$MCP_PATH"
 LEGACY_URL="$BASE$MCP_PATH/$LEARN_MCP_TOKEN"
 
 # --- 5. instructions -------------------------------------------------------
-term_banner "ngrok setup" "http://127.0.0.1:$PORT$MCP_PATH" "$URL"
-term_step "oauth" "connection code: $LEARN_MCP_TOKEN"
+term_banner "ngrok setup" "http://127.0.0.1:$PORT$MCP_PATH" "$URL" "$LEARN_MCP_TOKEN"
 term_step "oauth" "use OAuth; leave manual Client ID and Client Secret blank"
 
 cleanup() {
