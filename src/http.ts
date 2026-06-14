@@ -8,9 +8,12 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { createServer } from './server.js';
 import { closeBrowser } from './session.js';
 import { loadEnvLocal } from './env.js';
+import { createTerminalLogger } from './terminal.js';
 
 loadEnvLocal();
 
+const logger = createTerminalLogger();
+const PRETTY_LOGS = process.env.LEARN_MCP_PRETTY_LOGS === '1';
 const PORT = Number(process.env.PORT ?? 8787);
 const PATHNAME = process.env.LEARN_MCP_PATH ?? '/mcp';
 const OAUTH_SCOPE = 'mcp:tools';
@@ -24,8 +27,9 @@ const OAUTH_STATE_FILE = process.env.LEARN_MCP_OAUTH_FILE ?? path.join(ROOT, 'oa
 let TOKEN = process.env.LEARN_MCP_TOKEN;
 if (!TOKEN) {
   TOKEN = randomBytes(24).toString('base64url');
-  console.error(`No LEARN_MCP_TOKEN set — generated one for this run:\n  ${TOKEN}`);
-  console.error('Set LEARN_MCP_TOKEN to keep it stable across restarts.');
+  logger.warn('No LEARN_MCP_TOKEN set; generated one for this run.');
+  logger.status('token', TOKEN);
+  logger.warn('Set LEARN_MCP_TOKEN to keep it stable across restarts.');
 }
 
 type ClientInfo = {
@@ -76,12 +80,9 @@ function loadOAuthState() {
     for (const [token, data] of state.refreshTokens ?? []) {
       if (data.expiresAt >= Date.now()) refreshTokens.set(token, data);
     }
-    console.error(
-      `Loaded OAuth state from ${OAUTH_STATE_FILE}: ` +
-        `${clients.size} clients, ${accessTokens.size} access tokens, ${refreshTokens.size} refresh tokens.`,
-    );
+    logger.status('oauth', `loaded ${clients.size} clients, ${accessTokens.size} access tokens, ${refreshTokens.size} refresh tokens`);
   } catch (err) {
-    console.error(`Could not load OAuth state from ${OAUTH_STATE_FILE}:`, err);
+    logger.error(`Could not load OAuth state from ${OAUTH_STATE_FILE}.`, err);
   }
 }
 
@@ -453,18 +454,26 @@ function logMcpMessages(body: unknown, token: string) {
 
     let detail = method;
     if (method === 'tools/call' && typeof params?.name === 'string') detail = `tools/call ${params.name}`;
-    console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(token)} ${detail}`);
+    if (PRETTY_LOGS) {
+      logger.debug(`mcp client=${clientLabelForToken(token)} ${detail}`);
+    } else {
+      console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(token)} ${detail}`);
+    }
   }
 }
 
 const httpServer = createHttpServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
-  console.error(
-    `[req] ${new Date().toISOString()} ${req.method} ${redactPath(url.pathname)}${url.search} ` +
-      `auth=${req.headers.authorization ? 'bearer' : req.headers['x-api-key'] ? 'xapikey' : 'none'} ` +
-      `accept=${req.headers.accept ?? ''} ua=${req.headers['user-agent'] ?? ''}`,
-  );
+  const requestDetail =
+    `${req.method} ${redactPath(url.pathname)}${url.search} ` +
+    `auth=${req.headers.authorization ? 'bearer' : req.headers['x-api-key'] ? 'xapikey' : 'none'} ` +
+    `accept=${req.headers.accept ?? ''} ua=${req.headers['user-agent'] ?? ''}`;
+  if (PRETTY_LOGS) {
+    logger.request(requestDetail);
+  } else {
+    console.error(`[req] ${new Date().toISOString()} ${requestDetail}`);
+  }
 
   if (url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -527,7 +536,10 @@ const httpServer = createHttpServer(async (req, res) => {
 
   // Stateless: a fresh server + transport per request keeps things simple and
   // avoids cross-client session leakage. ChatGPT works fine without sessions.
-  const server = createServer();
+  const server = createServer({
+    clientLabel: clientLabelForToken(presented),
+    onToolCall: (event) => logger.tool(event),
+  });
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => {
     transport.close().catch(() => {});
@@ -539,12 +551,16 @@ const httpServer = createHttpServer(async (req, res) => {
     if (body !== undefined) {
       logMcpMessages(body, presented);
     } else if (req.method === 'GET') {
-      console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(presented)} sse-stream`);
+      if (PRETTY_LOGS) {
+        logger.debug(`mcp client=${clientLabelForToken(presented)} sse-stream`);
+      } else {
+        console.error(`[mcp] ${new Date().toISOString()} client=${clientLabelForToken(presented)} sse-stream`);
+      }
     }
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
   } catch (err) {
-    console.error('Request handling error:', err);
+    logger.error('Request handling error.', err);
     if (!res.headersSent) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal error' }, id: null }));
@@ -553,8 +569,12 @@ const httpServer = createHttpServer(async (req, res) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.error(`waterloo-learn MCP server (HTTP) listening on http://localhost:${PORT}${PATHNAME}`);
-  console.error('Expose this over HTTPS with a tunnel, then add the public URL as a ChatGPT custom connector.');
+  if (PRETTY_LOGS) {
+    logger.status('server', `ready on http://localhost:${PORT}${PATHNAME}`);
+  } else {
+    console.error(`waterloo-learn MCP server (HTTP) listening on http://localhost:${PORT}${PATHNAME}`);
+    console.error('Expose this over HTTPS with a tunnel, then add the public URL as a ChatGPT custom connector.');
+  }
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
