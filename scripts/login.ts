@@ -13,8 +13,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Locator, type Page } from 'playwright';
-import { refreshOutlineCache } from '../src/d2l.js';
 import { loadEnvLocal } from '../src/env.js';
+import { refreshOutlineCache } from '../src/learn/outlines.js';
 import { closeBrowser } from '../src/session.js';
 
 loadEnvLocal();

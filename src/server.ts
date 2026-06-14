@@ -1,16 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ToolCallLogEvent } from './terminal.js';
-import {
-  getAnnouncements,
-  getAssignments,
-  getContent,
-  getCourseOutline,
-  getGrades,
-  getTopicFile,
-  getUpcoming,
-  listCoursesWithTitles,
-} from './d2l.js';
+import { getAnnouncements } from './learn/announcements.js';
+import { getAssignments } from './learn/assignments.js';
+import { getContent } from './learn/content.js';
+import { listCoursesWithTitles } from './learn/courses.js';
+import { getGrades } from './learn/grades.js';
+import { getCourseOutline } from './learn/outlines.js';
+import { getTopicFile } from './learn/topic-files.js';
+import { getUpcoming } from './learn/upcoming.js';
 
 type ContentBlock =
   | { type: 'text'; text: string }
