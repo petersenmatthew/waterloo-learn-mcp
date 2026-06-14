@@ -26,12 +26,20 @@ term_banner() {
   local mode="$1"
   local local_url="$2"
   local connector_url="$3"
+  local connection_code="${4:-}"
 
   cat >&2 <<EOF
 
 ${TERM_BOLD}LEARN MCP${TERM_RESET} ${TERM_DIM}${mode}${TERM_RESET}
 ${TERM_DIM}local${TERM_RESET}     ${local_url}
 ${TERM_DIM}connector${TERM_RESET} ${connector_url}
+EOF
+
+  if [ -n "$connection_code" ]; then
+    printf '%bcode%b      %s\n' "$TERM_DIM" "$TERM_RESET" "$connection_code" >&2
+  fi
+
+  cat >&2 <<EOF
 
 ${TERM_DIM}time      source      message${TERM_RESET}
 EOF
