@@ -267,8 +267,18 @@ interface ViewerOutlineRow {
   url: string;
 }
 
+interface CachedViewerOutlines {
+  schemaVersion: 1;
+  rows: ViewerOutlineRow[];
+  fetchedAt: string;
+}
+
 function outlineCachePath(courseId: number): string {
   return path.join(OUTLINE_CACHE_DIR, `${courseId}.json`);
+}
+
+function viewerOutlinesCachePath(): string {
+  return path.join(OUTLINE_CACHE_DIR, 'viewer-outlines.json');
 }
 
 function cachedOutlineToResult(outline: CachedCourseOutline): CourseOutline {
@@ -325,6 +335,60 @@ async function writeCachedOutline(
     fetchedAt: new Date().toISOString(),
   };
   const file = outlineCachePath(courseId);
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(cache, null, 2), { mode: 0o600 });
+  await fs.rename(tmp, file);
+  await fs.chmod(file, 0o600).catch(() => {});
+}
+
+function isViewerOutlineRow(value: unknown): value is ViewerOutlineRow {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Partial<ViewerOutlineRow>;
+  return (
+    typeof row.term === 'string' &&
+    typeof row.course === 'string' &&
+    typeof row.title === 'string' &&
+    typeof row.sections === 'string' &&
+    typeof row.url === 'string'
+  );
+}
+
+function isCachedViewerOutlines(value: unknown): value is CachedViewerOutlines {
+  if (!value || typeof value !== 'object') return false;
+  const cache = value as Partial<CachedViewerOutlines>;
+  return (
+    cache.schemaVersion === 1 &&
+    Array.isArray(cache.rows) &&
+    cache.rows.every(isViewerOutlineRow) &&
+    typeof cache.fetchedAt === 'string'
+  );
+}
+
+async function readCachedViewerOutlines(): Promise<ViewerOutlineRow[] | null> {
+  try {
+    const raw = await fs.readFile(viewerOutlinesCachePath(), 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isCachedViewerOutlines(parsed)) {
+      console.warn('Ignoring invalid cached outline viewer metadata.');
+      return null;
+    }
+    return parsed.rows;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`Could not read cached outline viewer metadata: ${err}`);
+    }
+    return null;
+  }
+}
+
+async function writeCachedViewerOutlines(rows: ViewerOutlineRow[]): Promise<void> {
+  await fs.mkdir(OUTLINE_CACHE_DIR, { recursive: true });
+  const cache: CachedViewerOutlines = {
+    schemaVersion: 1,
+    rows,
+    fetchedAt: new Date().toISOString(),
+  };
+  const file = viewerOutlinesCachePath();
   const tmp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(cache, null, 2), { mode: 0o600 });
   await fs.rename(tmp, file);
@@ -419,10 +483,24 @@ async function getViewerOutlines(): Promise<ViewerOutlineRow[]> {
   if (viewerOutlineCache && Date.now() - viewerOutlineCache.at < VIEWER_CACHE_TTL_MS) {
     return viewerOutlineCache.rows;
   }
-  const rows = await fetchViewerOutlines();
-  viewerOutlineCache = { rows, at: Date.now() };
-  viewerOutlineFailureAt = 0;
-  return rows;
+  try {
+    const rows = await fetchViewerOutlines();
+    viewerOutlineCache = { rows, at: Date.now() };
+    viewerOutlineFailureAt = 0;
+    await writeCachedViewerOutlines(rows).catch((err) => {
+      console.warn(`Could not cache outline viewer metadata: ${err}`);
+    });
+    return rows;
+  } catch (err) {
+    const cachedRows = await readCachedViewerOutlines();
+    if (cachedRows) {
+      viewerOutlineCache = { rows: cachedRows, at: Date.now() };
+      console.warn(`Outline viewer unavailable (${err}); using cached outline titles.`);
+      return cachedRows;
+    }
+    viewerOutlineFailureAt = Date.now();
+    throw err;
+  }
 }
 
 async function findOutlineUrlFromViewer(course: Course): Promise<string | null> {
@@ -454,13 +532,13 @@ function findViewerRow(rows: ViewerOutlineRow[], lookup: CourseOutlineLookup): V
 export async function listCoursesWithTitles(): Promise<Course[]> {
   const courses = await listCourses();
   let rows: ViewerOutlineRow[] = [];
-  // Remember a failed scrape for the cache TTL so a missing outline session
-  // doesn't add a doomed page load to every list_courses call.
+  // Remember a failed lookup for the cache TTL so a missing outline session
+  // doesn't add a doomed request to every list_courses call when no local title
+  // cache exists yet.
   if (Date.now() - viewerOutlineFailureAt >= VIEWER_CACHE_TTL_MS) {
     try {
       rows = await getViewerOutlines();
     } catch (err) {
-      viewerOutlineFailureAt = Date.now();
       console.error(`Outline viewer titles unavailable (${err}); returning LEARN names only.`);
     }
   }
