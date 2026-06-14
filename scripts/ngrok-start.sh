@@ -58,6 +58,11 @@ command -v ngrok >/dev/null 2>&1 || die "ngrok isn't installed. On macOS: brew i
 BASE="https://$DOMAIN"
 URL="$BASE/mcp"
 
+if [ "${LEARN_MCP_SKIP_AUTH_CHECK:-}" != "1" ]; then
+  say "Checking saved LEARN session"
+  npm run -s check:auth || die "LEARN session check failed. If the network is fine, run: npm run login"
+fi
+
 cat <<EOF
 
 Starting waterloo-learn MCP over ngrok:

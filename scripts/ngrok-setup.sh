@@ -133,6 +133,10 @@ if [ ! -f "$ROOT/auth.json" ]; then
   say "No LEARN session yet — opening a browser. Sign in and approve the Duo push."
   npm run login
 fi
+if [ "${LEARN_MCP_SKIP_AUTH_CHECK:-}" != "1" ]; then
+  say "Checking saved LEARN session"
+  npm run -s check:auth || die "LEARN session check failed. If the network is fine, run: npm run login"
+fi
 
 BASE="https://$DOMAIN"
 URL="$BASE/mcp"

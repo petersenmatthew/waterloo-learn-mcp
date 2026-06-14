@@ -102,6 +102,13 @@ npm run start:ngrok
 
 Leave that terminal running while you want ChatGPT or Claude.ai to reach LEARN.
 
+If the LEARN session expired, `start:ngrok` exits before starting the tunnel.
+You can also check it directly:
+
+```sh
+npm run check:auth
+```
+
 To check the tunnel from another terminal:
 
 ```sh

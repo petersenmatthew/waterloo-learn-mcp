@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "login": "tsx scripts/login.ts",
+    "check:auth": "tsx scripts/check-auth.ts",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "start:http": "node dist/http.js",
