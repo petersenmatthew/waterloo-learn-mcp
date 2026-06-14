@@ -10,6 +10,7 @@ import {
   getUpcoming,
   listCoursesWithTitles,
 } from './d2l.js';
+import { getWatCardBalances, getWatCardTransactions } from './watcard.js';
 
 type ContentBlock =
   | { type: 'text'; text: string }
@@ -146,6 +147,31 @@ const upcomingOutput = z.object({
       end: z.string().nullable(),
       allDay: z.boolean(),
       description: z.string().nullable(),
+    }),
+  ),
+});
+
+const watcardBalanceOutput = z.object({
+  balances: z.array(
+    z.object({
+      name: z.string(),
+      type: z.string(),
+      amount: z.number(),
+      credit: z.number(),
+    }),
+  ),
+});
+
+const watcardTransactionOutput = z.object({
+  transactions: z.array(
+    z.object({
+      date: z.string(),
+      type: z.string(),
+      terminal: z.string(),
+      status: z.string(),
+      balance: z.number(),
+      units: z.number(),
+      amount: z.number(),
     }),
   ),
 });
@@ -307,6 +333,40 @@ export function createServer(): McpServer {
     },
     async ({ courseId }) =>
       runStructured(() => getCourseOutline(courseId), (outline) => ({ ...outline })),
+  );
+
+  server.registerTool(
+    'get_watcard_balance',
+    {
+      title: 'Get WatCard Balance',
+      description:
+        'Get your WatCard account balances including Residence Plan, Flexible dollars, and other funds. ' +
+        'Returns current balance and credit for each account type. ' +
+        'Use to answer: "What is my WatCard balance?", "How much money do I have left?", "Check my meal plan balance"',
+      inputSchema: z.object({}),
+      outputSchema: watcardBalanceOutput,
+    },
+    async () => runStructured(() => getWatCardBalances(), (balances) => ({ balances })),
+  );
+
+  server.registerTool(
+    'get_watcard_transactions',
+    {
+      title: 'Get WatCard Transactions',
+      description:
+        'Get your recent WatCard transaction history showing where and when you spent money. ' +
+        'Returns date, location (terminal), transaction type, status, and amount for each purchase. ' +
+        'Optional date filtering with fromDate/toDate in format YYYY-MM-DD. ' +
+        'Use to answer: "Where did I spend money today?", "Show my recent purchases", "What did I buy at the market?"',
+      inputSchema: z.object({
+        fromDate: z.string().optional().describe('Start date for transactions (YYYY-MM-DD format)'),
+        toDate: z.string().optional().describe('End date for transactions (YYYY-MM-DD format)'),
+        limit: z.number().int().min(1).max(100).optional().describe('Maximum number of transactions to return (default 50)'),
+      }),
+      outputSchema: watcardTransactionOutput,
+    },
+    async ({ fromDate, toDate, limit }) =>
+      runStructured(() => getWatCardTransactions(fromDate, toDate, limit), (transactions) => ({ transactions })),
   );
 
   return server;

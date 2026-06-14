@@ -170,6 +170,23 @@ try {
   );
 }
 
+console.log('Fetching WatCard session...');
+let watcardSessionCaptured = false;
+try {
+  // Navigate directly to the TouchNet portal (will redirect through WatIAM/Duo if needed)
+  await page.goto('https://secure.touchnet.net/C22566_oneweb');
+  await page.waitForURL((url) => url.hostname.includes('touchnet'), {
+    timeout: 5 * 60 * 1000,
+  });
+  watcardSessionCaptured = true;
+  console.log('WatCard session captured.');
+} catch (err) {
+  console.warn(
+    `Could not capture a WatCard session (${err}). ` +
+      'WatCard tools will not work until you run npm run login again.',
+  );
+}
+
 await context.storageState({ path: AUTH_FILE });
 console.log(`Session saved to ${AUTH_FILE}`);
 
