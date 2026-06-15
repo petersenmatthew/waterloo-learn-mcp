@@ -23,6 +23,15 @@ EOF
   chmod 600 "$ROOT/.ngrok-connector.txt"
 }
 
+check_auth() {
+  npm run -s check:auth >/dev/null 2>&1
+}
+
+refresh_login() {
+  term_step "auth" "opening LEARN login"
+  npm run login || die "LEARN login failed or was cancelled"
+}
+
 [ -f "$ENV_FILE" ] || die ".env.local is missing. Run: npm run setup:ngrok"
 
 # shellcheck disable=SC1090
@@ -45,10 +54,12 @@ term_banner "ngrok" "http://127.0.0.1:$PORT$MCP_PATH" "$URL"
 
 if [ "${LEARN_MCP_SKIP_AUTH_CHECK:-}" != "1" ]; then
   term_step "auth" "checking saved LEARN session"
-  AUTH_OUTPUT="$(npm run -s check:auth 2>&1)" || {
-    printf '%s\n' "$AUTH_OUTPUT" >&2
-    die "LEARN session check failed. If the network is fine, run: npm run login"
-  }
+  if ! check_auth; then
+    warn "saved LEARN session is missing or expired"
+    refresh_login
+    term_step "auth" "checking refreshed LEARN session"
+    check_auth || die "LEARN session is still invalid after login"
+  fi
   term_ok "auth" "session valid"
 fi
 
